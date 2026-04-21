@@ -11,11 +11,11 @@ how all the pieces connect, what every environment variable means, and how to ad
 2. [High-Level Architecture](#2-high-level-architecture)
 3. [Monorepo Structure](#3-monorepo-structure)
 4. [Environment Variables — Complete Reference](#4-environment-variables--complete-reference)
-5. [Package: `@workspace/firebase` — Database & Auth (Shared)](#5-package-workspacefirebase--database--auth-shared)
+5. [Package: `@workspace/supabase` — Database & Auth (Shared)](#5-package-workspacesupabase--database--auth-shared)
 6. [Package: `@workspace/api-client-react` — Frontend API Client (Shared)](#6-package-workspaceapi-client-react--frontend-api-client-shared)
 7. [App: `api-server` — Backend (Express + Firebase Functions)](#7-app-api-server--backend-express--firebase-functions)
 8. [App: `cert-app` — Frontend (React + Vite)](#8-app-cert-app--frontend-react--vite)
-9. [Data Model (Firestore Collections)](#9-data-model-firestore-collections)
+9. [Data Model (Supabase Tables)](#9-data-model-supabase-tables)
 10. [Authentication Flow — Two-Layer System](#10-authentication-flow--two-layer-system)
 11. [Certificate Generation Flow — Step by Step](#11-certificate-generation-flow--step-by-step)
 12. [Email Sending Flow](#12-email-sending-flow)
@@ -62,19 +62,19 @@ and slide template, hits Generate, then hits Send.
 │  React + Vite + Tailwind + shadcn/ui                           │
 │  Port 5173 in dev                                               │
 │                                                                 │
-│  Firebase Auth (Google sign-in popup)                          │
-│  → Gets Firebase ID Token                                      │
+│  Supabase Auth (Google sign-in popup)                           │
+│  → Gets Supabase Access Token                                   │
 │  → Sends token in every API request header                     │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ HTTPS   Authorization: Bearer <id_token>
+                            │ HTTPS   Authorization: Bearer <access_token>
                             ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  api-server (Express.js)                                        │
 │  Port 3000 in dev                                               │
-│  Deployed as Firebase Cloud Function (or Render.com)           │
+│  Deployed as Firebase Cloud Function                           │
 │                                                                 │
-│  Verifies Firebase ID Token → gets uid                         │
-│  Looks up user's Google refresh token from Firestore           │
+│  Verifies Supabase JWT → gets uid                              │
+│  Looks up user's Google refresh token from Supabase            │
 │  Calls Google APIs (Drive, Sheets, Slides, Gmail)              │
 │  Uploads PDFs to Cloudflare R2                                 │
 │  Sends WhatsApp messages via Meta Graph API                    │
@@ -82,9 +82,9 @@ and slide template, hits Generate, then hits Send.
                             │
           ┌─────────────────┼──────────────────┐
           ▼                 ▼                  ▼
-    Firestore DB     Google APIs        Cloudflare R2
-    (batches,        (Drive, Sheets,    (PDF storage,
-     certificates)    Slides, Gmail)    public URLs)
+    Supabase DB      Google APIs        Cloudflare R2
+    (PostgreSQL)     (Drive, Sheets,    (PDF storage,
+                     Slides, Gmail)    public URLs)
 ```
 
 ---
@@ -109,15 +109,15 @@ cert/                           ← root (workspace)
 │   └── cert-app/               ← Frontend (React + Vite)
 │
 └── packages/
-    ├── firebase/               ← Firebase Admin SDK setup + Firestore helpers
+    ├── supabase/               ← Supabase client setup + DB helpers
     ├── api-client-react/       ← Auto-generated API client + React Query hooks
     └── api-zod/                ← Auto-generated Zod schemas + TypeScript types
 ```
 
 **Key concept — workspace packages:**
-When `api-server` writes `import { db } from "@workspace/firebase"`, it does NOT go to npm.
-It imports the local `packages/firebase` folder. This is configured in each `package.json`'s
-`dependencies` as `"@workspace/firebase": "workspace:*"`.
+When `api-server` writes `import { supabaseAdmin } from "@workspace/supabase"`, it does NOT go to npm.
+It imports the local `packages/supabase` folder. This is configured in each `package.json`'s
+`dependencies` as `"@workspace/supabase": "workspace:*"`.
 
 **`pnpm-workspace.yaml` also defines a shared catalog** — a central version registry so all apps
 use the same version of React, Tailwind, etc. without repeating version numbers everywhere.
@@ -129,28 +129,21 @@ use the same version of React, Tailwind, etc. without repeating version numbers 
 All env vars live in a **single `.env` file at the repo root**. Vite reads it for the frontend
 (picks up `VITE_` prefixed vars only); the API server reads it via `process.env`.
 
-### Firebase Client (Frontend)
-These configure the browser-side Firebase SDK for sign-in.
+### Supabase Client (Frontend & Backend)
+These configure access to the Supabase database and Auth.
 
 | Variable | What it is | Where to get it |
 |---|---|---|
-| `VITE_FIREBASE_API_KEY` | Firebase project API key | Firebase Console → Project Settings → General |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Auth domain (e.g. `yourapp.firebaseapp.com`) | Same place |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID (e.g. `cephlow`) | Same place |
-| `VITE_FIREBASE_STORAGE_BUCKET` | Storage bucket URL | Same place |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Cloud Messaging sender ID | Same place |
-| `VITE_FIREBASE_APP_ID` | Firebase app ID | Same place |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Google Analytics ID (optional) | Same place |
+| `VITE_SUPABASE_URL` | Supabase project URL | Supabase Dashboard -> Settings -> API |
+| `VITE_SUPABASE_ANON_KEY` | Supabase public anon key | Same place |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase private key (backend only) | Same place (DO NOT EXPOSE TO FRONTEND) |
 
 ### Frontend URL
 | Variable | What it is | Example |
 |---|---|---|
 | `VITE_API_URL` | URL of the backend API | `http://localhost:3000` in dev, deployed URL in prod |
 
-### Firebase Admin (Backend)
-The backend uses the service account JSON file directly.
-Either set `FIREBASE_SERVICE_ACCOUNT_KEY` to the full JSON string, **or** place
-`firebase-service-account.json` in the repo root (the code tries both).
+
 
 ### Google OAuth 2.0
 Used by the backend to get long-lived tokens to call Google APIs on behalf of users.
@@ -206,36 +199,29 @@ Body: Hi {{1}}, your certificate for {{2}} is attached below.
 
 ---
 
-## 5. Package: `@workspace/firebase` — Database & Auth (Shared)
+## 5. Package: `@workspace/supabase` — Database & Auth (Shared)
 
-**File:** `packages/firebase/src/index.ts`
+**File:** `packages/supabase/src/index.ts`
 
-This package initializes Firebase Admin SDK **once** and exports reusable helpers.
-Both the API server and (in some contexts) other packages import from here.
+This package initializes the Supabase client **once** and exports reusable helpers and database types.
 
 ### What it exports
 
 ```typescript
-export const db        // Firestore database instance
-export const auth      // Firebase Admin Auth instance
-
-export const batchesCollection              // db.collection("batches")
-export function certificatesCollection(batchId)  // batches/{batchId}/certificates
-export const certIndexCollection            // db.collection("certIndex") — fast lookup
+export const supabaseAdmin  // Service role client (bypasses RLS)
+export function toCamel(row) // Helper to convert snake_case to camelCase
+export function toSnake(obj) // Helper to convert camelCase to snake_case
 
 // TypeScript type definitions:
 export interface Batch { ... }
 export interface Certificate { ... }
 ```
 
-### How Firebase Admin credentials are loaded
+### How Supabase is configured
 
-1. First tries `process.env.FIREBASE_SERVICE_ACCOUNT_KEY` (JSON string)
-2. Falls back to `firebase-service-account.json` at the repo root
-3. Throws a clear error if neither is found
-
-This means in production (Firebase Functions), you set the env var; in local dev, you just have
-the JSON file.
+1. Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from environment variables.
+2. The `supabaseAdmin` client is used for all backend database operations.
+3. The frontend uses its own client with the public `SUPABASE_ANON_KEY`.
 
 ---
 
@@ -318,7 +304,7 @@ Request comes in with: Authorization: Bearer eyJhbGciOiJSUzI1...
 
 requireAuth:
   1. Extracts token from header
-  2. Calls firebase.auth.verifyIdToken(token)
+  2. Calls supabaseAdmin.auth.getUser(token)
   3. On success: sets req.user = { uid, email }
   4. On failure: returns 401
 ```
@@ -371,10 +357,10 @@ See full details in [Certificate Generation Flow](#11-certificate-generation-flo
 
 #### `lib/googleAuth.ts` — OAuth Token Management
 
-This is the **bridge** between Firebase Auth (for login) and Google APIs (for Drive, Gmail, etc.).
+This is the **bridge** between Supabase Auth (for login) and Google APIs (for Drive, Gmail, etc.).
 
-**Problem it solves:** Firebase Auth lets users sign in with Google, but that only gives us a
-Firebase ID token (for our own backend). To call Google APIs, we need a separate OAuth token with
+**Problem it solves:** Supabase Auth lets users sign in with Google, but that only gives us a
+Supabase user identity. To call Google APIs, we need a separate OAuth token with
 specific scopes (Drive, Gmail, etc.). `googleAuth.ts` manages this second authorization.
 
 **Flow:**
@@ -582,97 +568,81 @@ Initializes Firebase using the `VITE_FIREBASE_*` env vars. Exports:
 
 ---
 
-## 9. Data Model (Firestore Collections)
+## 9. Data Model (Supabase Tables)
 
-### `batches` collection
+### `batches` table
 
-Each document represents one certificate batch:
+Each row represents one certificate batch:
 
 ```typescript
 {
-  userId: string           // Firebase UID of the owner
+  user_id: string          // Supabase UUID of the owner
   name: string             // e.g. "React Workshop Batch 1"
-  sheetId: string          // Google Sheets file ID
-  sheetName: string        // Display name of the sheet
-  tabName: string | null   // Sheet tab (e.g. "Sheet1")
-  templateId: string       // Google Slides template file ID
-  templateName: string     // Display name of the template
-  columnMap: {             // Maps placeholder → sheet column header
-    "Name": "Full Name",
-    "Course": "Workshop Name"
-  }
-  emailColumn: string      // Which column has email addresses
-  nameColumn: string       // Which column has recipient names
-  emailSubject: string     // Email subject (can have <<placeholders>>)
-  emailBody: string        // Email body text (can have <<placeholders>>)
-  categoryColumn: string   // (Optional) column for picking different templates
-  categoryTemplateMap: {   // (Optional) per-category template overrides
-    "Gold": { templateId: "...", templateName: "Gold Template" }
-  }
-  status: "draft" | "generating" | "generated" | "sending" | "sent" | "partial" | "failed"
-  driveFolderId: string    // Google Drive folder for slides
-  pdfFolderId: string      // Google Drive subfolder for PDFs
-  totalCount: number       // Total rows from the sheet
-  generatedCount: number   // How many certs have been generated
-  sentCount: number        // How many certs have been sent
-  createdAt: Timestamp
+  sheet_id: string         // Google Sheets file ID
+  sheet_name: string       // Display name of the sheet
+  tab_name: string | null  // Sheet tab (e.g. "Sheet1")
+  template_id: string      // Google Slides template file ID
+  template_name: string    // Display name of the template
+  column_map: jsonb        // Maps placeholder -> sheet column header
+  email_column: string     // Which column has email addresses
+  name_column: string      // Which column has recipient names
+  email_subject: string    // Email subject (can have <<placeholders>>)
+  email_body: string       // Email body text (can have <<placeholders>>)
+  category_column: string  // (Optional) column for picking different templates
+  category_template_map: jsonb // (Optional) per-category template overrides
+  status: string           // draft, generating, generated, etc.
+  drive_folder_id: string   // Google Drive folder for slides
+  pdf_folder_id: string     // Google Drive subfolder for PDFs
+  total_count: number      // Total rows from the sheet
+  generated_count: number  // How many certs have been generated
+  sent_count: number       // How many certs have been sent
+  created_at: timestamptz
 }
 ```
 
-### `batches/{batchId}/certificates` subcollection
+### `certificates` table
 
-Each document is one certificate for one person:
+Each row is one certificate for one person:
 
 ```typescript
 {
-  batchId: string
-  recipientName: string
-  recipientEmail: string
-  status: "pending" | "generated" | "sent" | "failed"
-  rowData: Record<string, string>  // Full row from the sheet
-  slideFileId: string | null       // Google Slides copy file ID
-  slideUrl: string | null          // Google Slides edit URL
-  pdfFileId: string | null         // Google Drive PDF file ID
-  pdfUrl: string | null            // Google Drive PDF URL
-  r2PdfUrl: string | null          // Cloudflare R2 public PDF URL
-  sentAt: Timestamp | null
-  errorMessage: string | null
-  createdAt: Timestamp
+  batch_id: uuid
+  recipient_name: string
+  recipient_email: string
+  status: string           // pending, generated, sent, failed
+  row_data: jsonb          // Full row from the sheet
+  slide_file_id: string | null
+  slide_url: string | null
+  pdf_file_id: string | null
+  pdf_url: string | null
+  r2_pdf_url: string | null
+  sent_at: timestamptz | null
+  error_message: string | null
+  created_at: timestamptz
 }
 ```
 
-### `userGoogleTokens` collection
+### `user_google_tokens` table
 
 Stores the Google OAuth refresh token per user:
 
 ```typescript
-// Document ID = Firebase UID
 {
-  refreshToken: string
-  updatedAt: number  // Unix timestamp
+  user_id: uuid (Primary Key)
+  refresh_token: string
+  updated_at: timestamptz
 }
 ```
 
-### `pendingGoogleAuth` collection
+### `pending_google_auth` table
 
-Temporary store for OAuth state nonces (auto-deleted after use):
-
-```typescript
-// Document ID = random nonce
-{
-  uid: string
-  expiresAt: number  // Unix timestamp (10 min window)
-}
-```
-
-### `certIndex` collection
-
-Fast lookup index: given a certificate ID, find which batch it belongs to.
+Temporary store for OAuth state nonces:
 
 ```typescript
-// Document ID = certificate ID
 {
-  batchId: string
+  state: string (Primary Key)
+  user_id: uuid
+  expires_at: timestamptz
 }
 ```
 
@@ -680,36 +650,36 @@ Fast lookup index: given a certificate ID, find which batch it belongs to.
 
 ## 10. Authentication Flow — Two-Layer System
 
-### Layer 1: Firebase Auth (Identity)
+### Layer 1: Supabase Auth (Identity)
 
 ```
 User clicks "Sign in with Google"
-  → Firebase popup opens
+  → Supabase Auth opens Google sign-in
   → User picks Google account
-  → Firebase creates session
-  → Frontend gets Firebase User object + ID Token
-  → ID Token expires every ~1 hour (auto-refreshed by Firebase SDK)
+  → Supabase creates session
+  → Frontend gets Supabase User object + Access Token
+  → Token is auto-refreshed by Supabase SDK
 ```
 
 Every API request sends this token:
 ```
-Authorization: Bearer eyJhbGci...   ← Firebase ID Token
+Authorization: Bearer <token>      ← Supabase Access Token
 ```
 
-The backend verifies it with Firebase Admin SDK. No session cookies, no JWT secrets needed.
+The backend verifies it using `supabaseAdmin.auth.getUser()`.
 
 ### Layer 2: Google OAuth (API Permissions)
 
 ```
 User clicks "Connect Google Account"
   → Frontend calls GET /api/auth/google/url
-  → Backend generates OAuth URL with required scopes
+  → Backend generates OAuth URL via googleapis
   → Browser redirects to Google consent page
-  → User approves: "Allow this app to access Drive, Gmail, etc."
+  → User approves permissions
   → Google redirects to /api/auth/google/callback?code=xxx&state=nonce
   → Backend exchanges code for tokens
-  → Stores refresh_token in Firestore userGoogleTokens/{uid}
-  → Redirects browser back to frontend with ?google_auth=success
+  → Stores refresh_token in Supabase user_google_tokens
+  → Redirects browser back to frontend
 ```
 
 After this, every backend operation that touches Google APIs:

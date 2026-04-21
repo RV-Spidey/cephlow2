@@ -7,7 +7,7 @@
 ## Project Structure
 - **Monorepo:** Managed with **pnpm workspaces**, allowing for shared packages (`packages/`) and multiple applications (`apps/`).
 - **Shared Packages:**
-  - `@workspace/firebase`: Shared Firebase Admin SDK setup and Firestore helpers.
+  - `@workspace/supabase`: Shared Supabase client, database types, and utility functions.
   - `@workspace/api-client-react`: Auto-generated API client and React Query hooks.
   - `@workspace/api-zod`: Shared Zod schemas and TypeScript types.
 
@@ -25,7 +25,8 @@
 - **Google OAuth 2.0:** Manages user permissions for accessing Drive, Sheets, Slides, and Gmail.
 
 ## Database & Storage
-- **Firestore (Firebase):** NoSQL document database for storing batch, certificate, and user metadata.
+- **Supabase (PostgreSQL):** Relational database used for storing batch, certificate, and user metadata.
+- **Supabase Auth:** Primary identity provider for user authentication.
 - **Cloudflare R2:** S3-compatible object storage used for public-facing certificate PDFs.
 - **Google Drive:** Used for storing intermediate Google Slides and PDF files within the user's account.
 

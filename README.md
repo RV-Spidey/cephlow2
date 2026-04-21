@@ -34,13 +34,13 @@ This project is structured as a **pnpm monorepo** with shared packages.
 - **Storage:** Cloudflare R2 (AWS S3 SDK) for public PDFs
 
 ### Shared Packages (`packages/`)
-- `@workspace/firebase`: Shared Firebase Admin SDK initialization and Firestore helpers.
+- `@workspace/supabase`: Shared Supabase client initialization, database types, and schema helpers.
 - `@workspace/api-client-react`: Auto-generated API client and React Query hooks.
 - `@workspace/api-zod`: Auto-generated Zod schemas and TypeScript types.
 
 ### Infrastructure & External Services
-- **Database:** Firebase Firestore
-- **Authentication:** Firebase Auth (Identity) + Google OAuth 2.0 (Permissions)
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** Supabase Auth (Identity) + Google OAuth 2.0 (Permissions)
 - **Storage:** Google Drive (Archival) + Cloudflare R2 (Public Edge Storage)
 - **Messaging:** Gmail API + Meta WhatsApp Business API
 - **Payments:** Cashfree API
@@ -56,7 +56,7 @@ For a comprehensive deep-dive into how every component works, how the authentica
 ### Prerequisites
 - Node.js (v18+)
 - `pnpm` (installed via `npm install -g pnpm`)
-- A Firebase Project
+- A Supabase Project
 - Google Cloud Console Project (with Drive, Sheets, Slides, and Gmail APIs enabled)
 - Cloudflare Account (for R2 Storage)
 - Meta Developer Account (for WhatsApp API)
@@ -71,9 +71,7 @@ pnpm install
 
 ### 2. Environment Variables
 
-Create a single `.env` file in the **root** of the repository. See [Section 4 of PROJECT_DOCS.md](./PROJECT_DOCS.md#4-environment-variables--complete-reference) for the complete list of required environment variables for Firebase, Google OAuth, Cloudflare R2, WhatsApp, and Cashfree.
-
-Make sure to place your `firebase-service-account.json` file in the root directory for backend authentication.
+Create a single `.env` file in the **root** of the repository. See [Section 4 of PROJECT_DOCS.md](./PROJECT_DOCS.md#4-environment-variables--complete-reference) for the complete list of required environment variables for Supabase, Google OAuth, Cloudflare R2, WhatsApp, and Cashfree.
 
 ### 3. Running Locally
 
@@ -97,7 +95,7 @@ pnpm --filter @workspace/api-server run generate
 ## 🔐 Security & Authentication
 
 This platform uses a robust **Two-Layer Authentication System**:
-1. **Firebase Auth:** Handles user identity ("Who are you?"). The frontend gets a Firebase ID Token and sends it as a Bearer token to the backend.
+1. **Supabase Auth:** Handles user identity ("Who are you?"). The frontend uses the Supabase SDK to manage sessions and send an Access Token as a Bearer token to the backend.
 2. **Google OAuth 2.0:** Handles API permissions ("Can we read your Sheets?"). The backend securely requests and stores refresh tokens to execute offline actions (like background certificate generation) on behalf of the user.
 
 ## 📝 License
