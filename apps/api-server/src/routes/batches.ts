@@ -452,165 +452,71 @@ router.post("/batches/:batchId/generate", async (req, res) => {
 
     res.json({ success: true, message: "Generation started" });
 
-    // Background processing
-    (async () => {
-      let generated = 0;
-      let failed = 0;
-
-      const CONCURRENCY = parseInt(process.env.CONCURRENCY_LIMIT || "4", 10);
-      for (let i = 0; i < targetCerts.length; i += CONCURRENCY) {
-        const chunk = targetCerts.slice(i, i + CONCURRENCY);
-        await Promise.all(chunk.map(async (cert) => {
-          try {
-            await supabaseAdmin.from("certificates").update({ status: "generating" }).eq("id", cert.id);
-
-            const rowData = (cert.rowData as Record<string, string>) || {};
-            const replacements: Record<string, string> = {};
-            for (const [placeholder, column] of Object.entries(batch.columnMap || {})) {
-              replacements[placeholder] = rowData[String(column)] || "";
-            }
-
-            const baseUrl = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-            const qrCodeUrl = `${baseUrl}/verify/${batchId}/${cert.id}`;
-
-            let certTemplateId = batch.templateId;
-            let certSlideIndex: number | null = null;
-
-            if (batch.categoryColumn && batch.categorySlideMap) {
-              const categoryValue = rowData[batch.categoryColumn] || "";
-              if (categoryValue && categoryValue in batch.categorySlideMap) {
-                certSlideIndex = batch.categorySlideMap[categoryValue];
-              } else if ("_default" in batch.categorySlideMap) {
-                certSlideIndex = batch.categorySlideMap["_default"];
-              } else {
-                certSlideIndex = 0;
-              }
-            } else if (batch.categoryColumn && batch.categoryTemplateMap) {
-              const categoryValue = rowData[batch.categoryColumn];
-              if (categoryValue && batch.categoryTemplateMap[categoryValue]) {
-                certTemplateId = batch.categoryTemplateMap[categoryValue].templateId;
-              }
-            }
-
-            const oldSlideFileId = cert.slideFileId;
-            const oldPdfFileId = cert.pdfFileId;
-            const oldR2Url = cert.r2PdfUrl;
-
-            let slideFileId = cert.slideFileId;
-            let slideUrl = cert.slideUrl;
-
-            if (cert.requiresVisualRegen !== false || !slideFileId) {
-              console.log(`[GENERATE] Visual change for ${cert.recipientName}. Generating Slides.`);
-              const genResult = await generateCertificate(
-                userId, certTemplateId, cert.recipientName, replacements,
-                batch.driveFolderId, qrCodeUrl, certSlideIndex
-              );
-              slideFileId = genResult.fileId;
-              slideUrl = genResult.url;
-              if (oldSlideFileId && oldSlideFileId !== slideFileId) {
-                deleteFile(userId, oldSlideFileId).catch(e => console.error("Cleanup error (Slide):", e));
-              }
-            } else {
-              console.log(`[GENERATE] Metadata-only for ${cert.recipientName}. Reusing Slides: ${slideFileId}`);
-            }
-
-            let pdfFileId = null;
-            let pdfUrl = null;
-            const pdfName = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}`;
-            const needsPdf = !!batch.pdfFolderId || isR2Configured();
-            let pdfBuffer: Buffer | null = null;
-
-            if (needsPdf) {
-              try {
-                pdfBuffer = await exportSlidesToPdf(userId, slideFileId);
-              } catch (pdfErr) {
-                console.error("Failed to export PDF for certificate:", cert.id, pdfErr);
-              }
-            }
-
-            if (pdfBuffer && batch.pdfFolderId) {
-              try {
-                const pdfRes = await uploadPdf(userId, pdfName, pdfBuffer, batch.pdfFolderId);
-                pdfFileId = pdfRes.fileId;
-                pdfUrl = pdfRes.url;
-                if (oldPdfFileId) {
-                  deleteFile(userId, oldPdfFileId).catch(e => console.error("Cleanup error (PDF):", e));
-                }
-              } catch (pdfErr) {
-                console.error("Failed to upload PDF to Google Drive:", cert.id, pdfErr);
-              }
-            }
-
-            let r2PdfUrl: string | null = null;
-            if (pdfBuffer && isR2Configured()) {
-              try {
-                const phoneNumber = extractPhoneNumber(rowData);
-                const r2Folder = phoneNumber || cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_");
-                const r2Key = await uploadPdfToR2(r2Folder, pdfName, pdfBuffer);
-                r2PdfUrl = getR2PublicUrl(r2Key);
-                if (oldR2Url) {
-                  const r2PublicBase = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
-                  if (r2PublicBase && oldR2Url.startsWith(r2PublicBase + "/") && oldR2Url !== r2PdfUrl) {
-                    const oldKey = oldR2Url.slice(r2PublicBase.length + 1);
-                    deleteR2Object(oldKey).catch(e => console.error("Cleanup error (R2):", e));
-                  }
-                }
-              } catch (r2Err) {
-                console.error("[R2] Upload failed for certificate:", cert.id, r2Err);
-              }
-            }
-
-            await supabaseAdmin.from("certificates").update({
-              status: "generated",
-              slide_file_id: slideFileId,
-              slide_url: slideUrl,
-              pdf_file_id: pdfFileId,
-              pdf_url: pdfUrl,
-              r2_pdf_url: r2PdfUrl,
-              error_message: null,
-              updated_at: new Date().toISOString(),
-              requires_visual_regen: false,
-            }).eq("id", cert.id);
-
-            if (cert.recipientEmail) {
-              upsertStudentProfile({
-                email: cert.recipientEmail,
-                name: cert.recipientName,
-                certId: cert.id,
-                batchId,
-                batchName: batch.name,
-                r2PdfUrl: r2PdfUrl ?? null,
-                pdfUrl: pdfUrl ?? null,
-                slideUrl: slideUrl ?? null,
-                status: "generated",
-              }).catch((err) => console.error("[PROFILE] upsert failed for", cert.recipientEmail, err));
-            }
-
-            if (cert.status !== "generated" && cert.status !== "sent") {
-              await supabaseAdmin.rpc("increment_batch_column", {
-                p_batch_id: batchId, p_column: "generated_count", p_amount: 1
-              });
-            }
-            generated++;
-          } catch (err: any) {
-            await supabaseAdmin.from("certificates").update({
-              status: "failed",
-              error_message: err.message,
-            }).eq("id", cert.id);
-            await supabaseAdmin.rpc("increment_batch_column", {
-              p_batch_id: batchId, p_column: "failed_count", p_amount: 1
-            });
-            failed++;
-          }
-        }));
+    // 1. Prepare tasks for the target certificates
+    const tasks = targetCerts.map((cert) => {
+      const rowData = (cert.rowData as Record<string, string>) || {};
+      const replacements: Record<string, string> = {};
+      for (const [placeholder, column] of Object.entries(batch.columnMap || {})) {
+        replacements[placeholder] = rowData[String(column)] || "";
       }
 
-      const newStatus = failed === 0 ? "generated" : generated > 0 ? "partial" : "draft";
-      await supabaseAdmin.from("batches").update({ status: newStatus }).eq("id", batchId);
-    })().catch(async (err: any) => {
-      console.error("[GENERATE] Background processing failed:", err);
-      await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
+      const baseUrl = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+      const qrCodeUrl = `${baseUrl}/verify/${batchId}/${cert.id}`;
+
+      let certTemplateId = batch.templateId;
+      let certSlideIndex: number | null = null;
+
+      if (batch.categoryColumn && batch.categorySlideMap) {
+        const categoryValue = rowData[batch.categoryColumn] || "";
+        if (categoryValue && categoryValue in (batch.categorySlideMap as any)) {
+          certSlideIndex = (batch.categorySlideMap as any)[categoryValue];
+        } else if ("_default" in (batch.categorySlideMap as any)) {
+          certSlideIndex = (batch.categorySlideMap as any)["_default"];
+        } else {
+          certSlideIndex = 0;
+        }
+      } else if (batch.categoryColumn && batch.categoryTemplateMap) {
+        const categoryValue = rowData[batch.categoryColumn];
+        if (categoryValue && (batch.categoryTemplateMap as any)[categoryValue]) {
+          certTemplateId = (batch.categoryTemplateMap as any)[categoryValue].templateId;
+        }
+      }
+
+      return {
+        batch_id: batchId,
+        certificate_id: cert.id,
+        type: "generate",
+        payload: {
+          userId,
+          templateId: certTemplateId,
+          recipientName: cert.recipientName,
+          replacements,
+          driveFolderId: batch.driveFolderId,
+          pdfFolderId: batch.pdfFolderId,
+          qrCodeUrl,
+          slideIndex: certSlideIndex,
+          batchName: batch.name,
+          recipientEmail: cert.recipientEmail
+        },
+        status: "pending"
+      };
     });
+
+    // 2. Bulk insert tasks into the queue
+    if (tasks.length > 0) {
+      const { error: taskErr } = await supabaseAdmin
+        .from("tasks")
+        .insert(tasks);
+
+      if (taskErr) {
+        console.error("[GENERATE] Failed to insert tasks:", taskErr);
+        // Fallback: at least try to mark the batch as draft if task insertion failed
+        await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
+      } else {
+        console.log(`[GENERATE] Successfully queued ${tasks.length} tasks for batch ${batchId}`);
+      }
+    }
+
     return;
   } catch (err: any) {
     console.error("[GENERATE] Initial request failed:", err);

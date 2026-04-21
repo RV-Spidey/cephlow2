@@ -43,6 +43,22 @@ export function toSnake(obj: Record<string, any>): Record<string, any> {
   return result;
 }
 
+export type TaskType = 'generate' | 'send_email' | 'send_whatsapp';
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface Task {
+  id: string;
+  batchId: string;
+  certificateId?: string | null;
+  type: TaskType;
+  payload: Record<string, any>;
+  status: TaskStatus;
+  attempts: number;
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Batch {
   id: string;
   userId: string;
