@@ -48,6 +48,6 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
-
+.env.example
 # Firebase service account key
 firebase-service-account.json
