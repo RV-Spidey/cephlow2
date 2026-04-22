@@ -13,7 +13,7 @@ how all the pieces connect, what every environment variable means, and how to ad
 4. [Environment Variables — Complete Reference](#4-environment-variables--complete-reference)
 5. [Package: `@workspace/supabase` — Database & Auth (Shared)](#5-package-workspacesupabase--database--auth-shared)
 6. [Package: `@workspace/api-client-react` — Frontend API Client (Shared)](#6-package-workspaceapi-client-react--frontend-api-client-shared)
-7. [App: `api-server` — Backend (Express + Firebase Functions)](#7-app-api-server--backend-express--firebase-functions)
+7. [App: `api-server` — Backend (Express)](#7-app-api-server--backend-express)
 8. [App: `cert-app` — Frontend (React + Vite)](#8-app-cert-app--frontend-react--vite)
 9. [Data Model (Supabase Tables)](#9-data-model-supabase-tables)
 10. [Authentication Flow — Two-Layer System](#10-authentication-flow--two-layer-system)
@@ -71,7 +71,7 @@ and slide template, hits Generate, then hits Send.
 ┌─────────────────────────────────────────────────────────────────┐
 │  api-server (Express.js)                                        │
 │  Port 3000 in dev                                               │
-│  Deployed as Firebase Cloud Function                           │
+│  Deployed as Node.js Web Service on Render.com        │
 │                                                                 │
 │  Verifies Supabase JWT → gets uid                              │
 │  Looks up user's Google refresh token from Supabase            │
@@ -96,16 +96,14 @@ The project uses **pnpm workspaces** — one repository, multiple packages that 
 ```
 cert/                           ← root (workspace)
 ├── .env                        ← ALL environment variables (single file for all apps)
-├── firebase-service-account.json ← Firebase Admin credentials (never commit)
 ├── package.json                ← root scripts (build, typecheck)
 ├── pnpm-workspace.yaml         ← defines workspace members + shared dependency versions
 ├── tsconfig.json               ← root TypeScript project references
 ├── tsconfig.base.json          ← shared TS compiler options
-├── firebase.json               ← Firebase Hosting + Functions deployment config
-├── render.yaml                 ← Render.com deployment config (alternative)
+├── render.yaml                 ← Render.com deployment config
 │
 ├── apps/
-│   ├── api-server/             ← Backend (Express + Firebase Cloud Functions)
+│   ├── api-server/             ← Backend (Express)
 │   └── cert-app/               ← Frontend (React + Vite)
 │
 └── packages/
@@ -248,7 +246,7 @@ This is the core. Every API call in the frontend goes through `customFetch()`.
 ```
 Frontend component calls useGetBatches()
   → calls customFetch("/api/batches", { method: "GET" })
-    → calls authTokenProvider() to get the Firebase ID token
+    → calls authTokenProvider() to get the Auth ID token
     → adds Authorization: Bearer <token> header
     → adds the base URL (VITE_API_URL)
     → makes the actual HTTP request
@@ -258,7 +256,7 @@ Frontend component calls useGetBatches()
 
 Two things can be configured once at startup (done in `use-auth.tsx`):
 - `setBaseUrl(url)` — set to `VITE_API_URL`
-- `setAuthTokenProvider(fn)` — set to a function that returns the current Firebase ID token
+- `setAuthTokenProvider(fn)` — set to a function that returns the current Auth ID token
 
 ### React Query integration
 
@@ -270,7 +268,7 @@ The auto-generated hooks (like `useGetBatches`, `usePostBatchesBatchIdGenerate`)
 
 ---
 
-## 7. App: `api-server` — Backend (Express + Firebase Functions)
+## 7. App: `api-server` — Backend (Express)
 
 **Folder:** `apps/api-server/src/`
 
@@ -279,7 +277,6 @@ The auto-generated hooks (like `useGetBatches`, `usePostBatchesBatchIdGenerate`)
 | File | Purpose |
 |---|---|
 | `index.ts` | Starts a plain Node.js HTTP server on `PORT` (used in dev / Render.com) |
-| `functions.ts` | Exports the Express app as a Firebase Cloud Function named `api` |
 | `app.ts` | Creates the Express app, attaches all middleware and routes |
 
 ### `app.ts` — Route Mounting Order
@@ -300,7 +297,7 @@ app.use("/api", requireAuth, router) // ALL OTHER routes — auth required
 
 ```
 Request comes in with: Authorization: Bearer eyJhbGciOiJSUzI1...
-                                           ↑ Firebase ID Token (short-lived JWT)
+                                           ↑ Auth ID Token (short-lived JWT)
 
 requireAuth:
   1. Extracts token from header
@@ -366,18 +363,18 @@ specific scopes (Drive, Gmail, etc.). `googleAuth.ts` manages this second author
 **Flow:**
 ```
 1. generateAuthUrl(uid)
-   → Creates a random nonce, stores it in Firestore as pendingGoogleAuth/{nonce}
+   → Creates a random nonce, stores it in Supabase as pending_google_auth
    → Returns Google OAuth URL with: offline access, consent prompt, specific scopes, nonce as state
 
 2. User visits the URL, grants permissions
 
 3. handleCallback(code, state)
-   → Verifies the state nonce against Firestore (prevents CSRF)
+   → Verifies the state nonce against Supabase (prevents CSRF)
    → Exchanges code for tokens
-   → Stores refresh_token in Firestore as userGoogleTokens/{uid}
+   → Stores refresh_token in Supabase as user_google_tokens
 
 4. getAuthClientForUser(uid)
-   → Reads refresh token from Firestore
+   → Reads refresh token from Supabase
    → Creates google.auth.OAuth2 client with it
    → Returns the client (Google APIs auto-refresh access token as needed)
 ```
@@ -487,7 +484,7 @@ src/
 ├── index.css             ← Global styles + Tailwind import
 │
 ├── lib/
-│   ├── firebase.ts       ← Firebase app init, sign-in, sign-out
+│   ├── supabase.ts       ← Supabase app init, sign-in, sign-out
 │   └── utils.ts          ← cn() helper for Tailwind class merging
 │
 ├── hooks/
@@ -546,23 +543,23 @@ const { user, loading, hasGoogleAuth, login, logout, connectGoogle } = useAuth()
 ```
 
 What each property means:
-- `user` — Firebase User object (null if not logged in)
+- `user` — Auth User object (null if not logged in)
 - `loading` — true while checking auth state on page load
 - `hasGoogleAuth` — true if the user has connected their Google account for API access
-- `login()` — opens Google sign-in popup (Firebase Auth only)
-- `logout()` — signs out of Firebase
+- `login()` — opens Google sign-in popup
+- `logout()` — signs out
 - `connectGoogle()` — redirects to Google OAuth to grant API permissions
 
 **Important distinction:**
-- `login()` = Firebase sign-in (identity — who are you?)
+- `login()` = Auth sign-in (identity — who are you?)
 - `connectGoogle()` = Google OAuth (permissions — can we use your Drive, Gmail?)
 
 These are two separate steps. A user can be logged in but not have connected Google yet.
 
-### `lib/firebase.ts` — Firebase Client
+### `lib/supabase.ts` — Supabase Client
 
-Initializes Firebase using the `VITE_FIREBASE_*` env vars. Exports:
-- `auth` — the Firebase Auth instance
+Initializes Supabase using the `VITE_SUPABASE_*` env vars. Exports:
+- `auth` — the Supabase Auth instance
 - `signInWithGoogle()` — popup sign-in
 - `signOut()` — sign out
 
@@ -685,7 +682,7 @@ User clicks "Connect Google Account"
 After this, every backend operation that touches Google APIs:
 ```typescript
 const auth = await getAuthClientForUser(uid)
-// → reads refresh token from Firestore
+// → reads refresh token from Supabase
 // → creates OAuth2 client
 // → Google auto-refreshes access tokens as needed
 const drive = google.drive({ version: "v3", auth })
@@ -704,8 +701,8 @@ Backend does:
 1. Reads the Google Sheet to get all rows
 2. Creates a Drive folder: "{batchName}/"
 3. Creates a Drive subfolder: "{batchName}/pdf/"
-4. Saves batch document to Firestore
-5. Creates one certificate document per sheet row (status: "pending")
+4. Saves batch record to Supabase
+5. Creates one certificate record per sheet row (status: "pending")
 6. Returns the created batch
 ```
 
@@ -740,7 +737,7 @@ Backend:
       → Upload to Cloudflare R2
       → Returns r2PdfUrl (public URL)
 
-   h. Update certificate in Firestore:
+   h. Update certificate in Supabase:
       status: "generated", slideFileId, slideUrl, pdfFileId, pdfUrl, r2PdfUrl
 
    i. Update batch.generatedCount (so frontend progress bar updates)
@@ -848,8 +845,8 @@ This URL is encoded in the QR code embedded in each certificate.
 
 **Backend (`GET /api/verify/:batchId/:certId`):**
 ```
-1. Fetch certificate from batches/{batchId}/certificates/{certId}
-2. Fetch batch from batches/{batchId}
+1. Fetch certificate from certificates table where id={certId}
+2. Fetch batch from batches table where id={batchId}
 3. Return: { recipientName, status, batchName, issuedAt, r2PdfUrl }
 ```
 
@@ -869,26 +866,15 @@ Used when embedding in the slide template
 
 ## 15. Deployment
 
-### Option A: Firebase Hosting + Cloud Functions
+### Deployment
 
-**What gets deployed where:**
-- Frontend → Firebase Hosting (static files from `apps/cert-app/dist/public/`)
-- Backend → Firebase Cloud Functions (the Express app wrapped as a function)
+The project is deployed on **Render.com**.
 
-**Deploy commands:**
-```bash
-firebase deploy              # deploys both hosting and functions
-firebase deploy --only hosting
-firebase deploy --only functions
-```
+**`render.yaml`** defines two services:
+- Web Service (backend): runs `node apps/api-server/dist/index.cjs`
+- Static Site (frontend): builds and serves the React app
 
-**`firebase.json` routing:**
-```
-/api/** → Cloud Function "api"
-/**     → index.html (React SPA)
-```
-
-**Build steps (automatic via predeploy hooks):**
+**Build steps:**
 ```bash
 # Frontend build
 pnpm --filter @workspace/cert-app build
@@ -896,12 +882,6 @@ pnpm --filter @workspace/cert-app build
 # Backend build (bundles to a single file with esbuild)
 pnpm --filter @workspace/api-server build
 ```
-
-### Option B: Render.com
-
-**`render.yaml`** defines two services:
-- Web Service (backend): runs `node dist/index.js`
-- Static Site (frontend): builds and serves the React app
 
 ---
 
@@ -929,7 +909,7 @@ configuration in dev.
 5. Enable: Drive API, Sheets API, Slides API, Gmail API
 
 **Then in the app:**
-1. Sign in with Google (Firebase Auth)
+1. Sign in with Google (Supabase Auth)
 2. Go to Settings → Connect Google Account
 3. Approve the permissions
 4. Start using the app
@@ -1001,10 +981,10 @@ const r2Folder = phoneNumber || cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")
 ```
 Change these two spots to change how files are organized.
 
-### Add a new Firestore collection
+### Add a new table
 
-1. Add the collection reference to `packages/firebase/src/index.ts`
-2. Add a TypeScript interface for the document shape
+1. Create a new table in the Supabase Dashboard
+2. Update types in `packages/supabase/src/index.ts` if needed
 3. Import and use in your route handler
 
 ---
@@ -1022,7 +1002,7 @@ Change these two spots to change how files are organized.
 | Change navigation sidebar | `apps/cert-app/src/components/layout/AppSidebar.tsx` |
 | Change app shell layout | `apps/cert-app/src/components/layout/Layout.tsx` |
 | Change auth behavior | `apps/cert-app/src/hooks/use-auth.tsx` |
-| Add a Firestore collection | `packages/firebase/src/index.ts` |
+| Add a database table | Supabase Dashboard |
 | Change how API calls are made | `packages/api-client-react/src/custom-fetch.ts` |
 | Add env vars | `.env` at root + document in this file |
 
@@ -1033,14 +1013,15 @@ Change these two spots to change how files are organized.
 The project uses **Cashfree** to implement a prepaid wallet architecture. This acts as a financial tollbooth, requiring users to top up their wallet and spend credits to generate certificates.
 
 ### Data Model Updates
-- **`userProfiles` collection:** Tracks `currentBalance` for the user.
-- **`ledgers` collection:** Records all financial transactions (`wallet_topup`, `batch_deduction`, `meta_refund`) for an immutable financial history.
+### Data Model Updates
+- **`user_profiles` table:** Tracks `current_balance` for the user.
+- **`ledgers` table:** Records all financial transactions (`wallet_topup`, `batch_deduction`, `meta_refund`) for an immutable financial history.
 
 ### Wallet Workflow
 1. **Top-Up:** A user clicks "Add Credits" and enters an amount.
 2. **Order Creation:** The backend (`POST /api/payments/create-order`) registers the intent with Cashfree and returns a `payment_session_id`.
 3. **Checkout:** The frontend utilizes the Cashfree JS SDK to show the payment modal using the session ID.
-4. **Webhook Confirmation:** Cashfree asynchronously sends a webhook upon success (`POST /api/webhooks/cashfree`). The backend verifies the SHA-256 signature and securely credits the user's `currentBalance` in Firestore while logging a `wallet_topup` ledger entry.
+4. **Webhook Confirmation:** Cashfree asynchronously sends a webhook upon success (`POST /api/webhooks/cashfree`). The backend verifies the SHA-256 signature and securely credits the user's `current_balance` in Supabase while logging a `wallet_topup` ledger entry.
 
 ### Upfront Batch Deductions
-Before a batch can begin generation (`POST /api/batches/:batchId/generate`), the backend calculates the batch cost (`row_count * rate`). By using an atomic Firestore transaction (`runTransaction`), it checks if `currentBalance >= cost`. If valid, it deducts the amount, logs a `batch_deduction`, and begins generating the certificates. If invalid, it throws a `402 Payment Required` error, and the UI prompts the user to top up.
+Before a batch can begin generation (`POST /api/batches/:batchId/generate`), the backend calculates the batch cost (`row_count * rate`). It checks if `current_balance >= cost`. If valid, it deducts the amount, logs a `batch_deduction`, and begins generating the certificates. If invalid, it throws a `402 Payment Required` error, and the UI prompts the user to top up.

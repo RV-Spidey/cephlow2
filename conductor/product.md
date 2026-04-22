@@ -23,5 +23,5 @@ The current focus is on enhancing the **reliability** of the generation and deli
 
 ## Main Constraints
 - **Efficiency:** Reducing the cost and time of generating large batches of PDFs.
-- **Ease of Deployment:** Keeping the platform simple to deploy and manage (e.g., via Firebase Functions).
+- **Ease of Deployment:** Keeping the platform simple to deploy and manage (e.g., via Render.com).
 - **Security:** Ensuring that only authorized users can generate certificates and that verification is secure.

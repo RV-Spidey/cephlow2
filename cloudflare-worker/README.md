@@ -54,11 +54,11 @@ wrangler deploy
 
 ---
 
-## Why Cloudflare D1 (not Firebase)
+## Why Cloudflare D1 (not a traditional NoSQL database)
 
 The analytics feature needed time-series aggregations: active users per day, per month, per year, and download counts. We evaluated two options:
 
-### Option A: Firebase Firestore
+### Option A: Traditional NoSQL (e.g. Firestore)
 - Would require changes to the API server (`apps/api-server`) to receive and store logs
 - Would require changes to the cert-app frontend to display the dashboard
 - Firestore doesn't support `GROUP BY` or `COUNT(DISTINCT)` — aggregations would have to be computed in application code by fetching all documents
@@ -126,4 +126,4 @@ Worker logs the interaction to D1
 Founder visits /analytics?token=... → Worker queries D1 → renders HTML dashboard
 ```
 
-Delivery status updates (sent → delivered → read) from Meta are forwarded to the main API server, which updates the certificate status in Firebase.
+Delivery status updates (sent → delivered → read) from Meta are forwarded to the main API server, which updates the certificate status in Supabase.

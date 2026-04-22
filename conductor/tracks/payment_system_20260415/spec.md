@@ -10,14 +10,14 @@ This track involves integrating Cashfree Payments to build a robust prepaid wall
 
 ## Functional Requirements
 - Integrate Cashfree for payment order creation (backend) and checkout rendering (frontend).
-- Build a Firestore data model utilizing `userProfiles` for the current balance and an immutable `ledgers` collection for transaction history.
+- Build a Supabase data model utilizing `user_profiles` for the current balance and an immutable `ledgers` table for transaction history.
 - Implement secure webhooks to handle Cashfree payment success and automatically credit the user's wallet.
 - Gate the certificate generation trigger based on the calculation: `(csv_row_count * flat_rate) <= currentBalance`.
 
 ## Technical Requirements
 - Use `@cashfreepayments/cashfree-js` on the React frontend.
 - Use `cashfree-pg-sdk-nodejs` on the Node.js backend.
-- Execute all financial state changes using Firestore `runTransaction` to ensure atomicity and prevent race conditions.
+- Execute all financial state changes using Supabase transactions to ensure atomicity and prevent race conditions.
 - Securely verify all incoming Cashfree webhook signatures (SHA-256) before interacting with the database.
 
 ## Acceptance Criteria

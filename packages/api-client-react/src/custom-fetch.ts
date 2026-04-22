@@ -311,7 +311,7 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  // Inject Firebase ID token if provider is configured
+  // Inject Auth ID token if provider is configured
   if (_authTokenProvider) {
     try {
       const idToken = await _authTokenProvider();

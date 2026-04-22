@@ -28,7 +28,7 @@ This project is structured as a **pnpm monorepo** with shared packages.
 - **Routing:** React Router v6
 
 ### Backend (`apps/api-server`)
-- **Framework:** Express.js (deployed via Render.com or Firebase Cloud Functions)
+- **Framework:** Express.js (deployed via Render.com)
 - **Language:** TypeScript
 - **Google APIs:** Drive, Sheets, Slides, Gmail
 - **Storage:** Cloudflare R2 (AWS S3 SDK) for public PDFs
