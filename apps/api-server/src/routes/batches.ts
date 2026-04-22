@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { supabaseAdmin, toCamel, type Certificate } from "@workspace/supabase";
 import { getSheetsClient } from "../lib/googleSheets.js";
 import { generateCertificate, exportSlidesToPdf, createFolder, uploadPdf, makeFilePublic, deleteFile } from "../lib/googleDrive.js";
+import { extractTemplate, getTemplateConfig } from "../lib/pdfExtractor.js";
 import { sendEmail } from "../lib/gmail.js";
 import { uploadPdfToR2, isR2Configured, getR2PublicUrl, deleteR2Objects, deleteR2Object } from "../lib/cloudflareR2.js";
 import { isWhatsAppConfigured, sendWhatsAppDocument } from "../lib/whatsapp.js";
@@ -395,6 +396,18 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
     const batch = toCamel(batchRow) as any;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
+
+    // Phase 1: Ensure template config exists
+    try {
+      const existingConfig = await getTemplateConfig(batch.templateId);
+      if (!existingConfig) {
+        console.log(`[GENERATE] Template config missing for ${batch.templateId}. Extracting...`);
+        await extractTemplate(userId, batch.templateId);
+      }
+    } catch (extractErr: any) {
+      console.error("[GENERATE] Template extraction failed:", extractErr);
+      return res.status(500).json({ error: `Template setup failed: ${extractErr.message}` });
+    }
 
     const { data: certsData } = await supabaseAdmin
       .from("certificates")
