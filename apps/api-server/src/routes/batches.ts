@@ -411,7 +411,7 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     }
 
     const unpaidCerts = targetCerts.filter(c => !c.isPaid);
-    const visualRegenCerts = targetCerts.filter(c => c.isPaid && c.status === "outdated" && c.requiresVisualRegen);
+    const visualRegenCerts = targetCerts.filter(c => c.isPaid); // For testing: treat all paid certs as regeneration candidates
 
     const unpaidCount = unpaidCerts.length;
     const visualRegenCount = visualRegenCerts.length;
@@ -450,7 +450,8 @@ router.post("/batches/:batchId/generate", async (req, res) => {
       throw rpcErr;
     }
 
-    res.json({ success: true, message: "Generation started" });
+    // Start the async processing
+
 
     // 1. Prepare tasks for the target certificates
     const tasks = targetCerts.map((cert) => {
@@ -513,11 +514,18 @@ router.post("/batches/:batchId/generate", async (req, res) => {
         // Fallback: at least try to mark the batch as draft if task insertion failed
         await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
       } else {
-        console.log(`[GENERATE] Successfully queued ${tasks.length} tasks for batch ${batchId}`);
+        // 3. For testing: Force batch status to draft so it's never stuck in "generating"
+        await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
+
+        // 4. Reset target certificates to pending status to allow (re)processing
+        if (targetCerts.length > 0) {
+          const targetIds = targetCerts.map(c => c.id);
+          await supabaseAdmin.from("certificates").update({ status: "pending", error_message: null }).in("id", targetIds);
+        }
       }
     }
 
-    return;
+    return res.json({ success: true, message: "Generation started" });
   } catch (err: any) {
     console.error("[GENERATE] Initial request failed:", err);
     try {
@@ -602,8 +610,8 @@ router.post("/batches/:batchId/send", async (req, res) => {
 
     const alreadySent = allCerts.filter(c => c.status === "sent").length;
     const totalSent = sent + alreadySent;
-    const newStatus = failed === 0 ? "sent" : totalSent > 0 ? "partial" : "generated";
-    await supabaseAdmin.from("batches").update({ status: newStatus, sent_count: totalSent }).eq("id", batchId);
+    // For testing: Always keep batch in draft
+    await supabaseAdmin.from("batches").update({ status: "draft", sent_count: totalSent }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} emails. ${failed} failed.`, processed: sent, failed });
   } catch (err: any) {
@@ -689,16 +697,16 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
 
     const alreadySent = allCerts.filter(c => c.status === "sent").length;
     const totalSent = sent + alreadySent;
-    const newStatus = failed === 0 ? "sent" : totalSent > 0 ? "partial" : "generated";
+    // For testing: Always keep batch in draft
     await supabaseAdmin.from("batches").update({
-      status: newStatus,
+      status: "draft",
       sent_count: totalSent,
       whatsapp_sent_count: (batch.whatsappSentCount || 0) + sent,
     }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} WhatsApp messages. ${failed} failed.`, processed: sent, failed });
   } catch (err: any) {
-    await supabaseAdmin.from("batches").update({ status: "generated" }).eq("id", batchId);
+    await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
     return res.status(500).json({ error: err.message });
   }
 });
