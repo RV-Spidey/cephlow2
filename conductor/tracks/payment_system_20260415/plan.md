@@ -17,8 +17,8 @@ Goal: Configure Cashfree sandbox environments and build the backend endpoint to 
 Goal: Build the user interface for tracking balances and executing the Cashfree checkout flow.
 
 - [x] Task: Build the Wallet Dashboard
-    - [x] Create a `WalletOverview` component that fetches and displays the `currentBalance` from the `userProfiles` collection.
-    - [x] Create a `LedgerTable` component to display the financial history from the `ledgers` collection.
+    - [x] Create a `WalletOverview` component that fetches and displays the `current_balance` from the `user_profiles` table.
+    - [x] Create a `LedgerTable` component to display the financial history from the `ledgers` table.
 - [x] Task: Integrate Cashfree JS SDK
     - [x] Install `@cashfreepayments/cashfree-js`.
     - [x] Build a `TopUpModal` component allowing users to select or input a credit amount.
@@ -26,13 +26,13 @@ Goal: Build the user interface for tracking balances and executing the Cashfree 
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Frontend Wallet UI & Checkout'
 
 ## Phase 3: The Top-Up Webhook & Ledger Architecture
-Goal: Safely catch successful payments asynchronously and update the user's balance in Firestore.
+Goal: Safely catch successful payments asynchronously and update the user's balance in Supabase.
 
 - [x] Task: Implement Cashfree Webhook Handler
     - [x] Create a `POST /api/webhooks/cashfree` route.
     - [x] Implement standard SHA-256 signature verification to ensure the webhook legitimately originated from Cashfree.
-    - [x] Write the atomic Firestore `runTransaction` to handle the `SUCCESS` payload.
-    - [x] Database Logic: Increment the balance in `userProfiles` AND insert a corresponding document into `ledgers` (type: `wallet_topup`).
+    - [x] Write the atomic Supabase transaction to handle the `SUCCESS` payload.
+    - [x] Database Logic: Increment the balance in `user_profiles` AND insert a corresponding record into `ledgers` (type: `wallet_topup`).
 - [x] Task: Conductor - User Manual Verification 'Phase 3: Top-Up Webhook & Ledger Architecture'
 
 ## Phase 4: Upfront Billing & Generation Gating
@@ -41,7 +41,7 @@ Goal: Act as the financial tollbooth, charging the user for the entire batch bef
 - [x] Task: Implement Upfront Deduction Logic
     - [x] Update the existing `POST /api/batches/:batchId/generate` endpoint.
     - [x] Logic: Calculate the total batch cost (`totalCount * rate`).
-    - [x] Logic: Execute a `runTransaction` to check if `currentBalance >= cost`.
+    - [x] Logic: Execute a Supabase transaction to check if `current_balance >= cost`.
     - [x] Execution: If valid, deduct the balance, write to `ledgers` (type: `generation_deduction`), and initiate generation. If invalid, throw an HTTP 402 Payment Required error.
 - [x] Task: Frontend Generation Gating
     - [x] Update the `BatchDetail` page to display the calculated upfront cost in the "Generate" button.
@@ -55,4 +55,4 @@ Goal: Catch failed WhatsApp deliveries via Meta webhooks and safely credit the e
     - [ ] Ensure the `dispatches` (or `certificates`) tracking table includes `meta_message_id` and a `refundStatus` flag (default: `'none'`).
 - [ ] Task: Implement Meta Webhook Receiver & Ledger Credit
     - [ ] Create `POST /api/webhooks/meta-status` to listen for delivery failures.
-    - [ ] Write an idempotent Firestore `runTransaction` that checks if `refundStatus === 'refunded'` before incrementing the `userProfiles` balance and writing to `ledgers` (type: `meta_refund`).
+    - [ ] Write an idempotent Supabase transaction that checks if `refund_status === 'refunded'` before incrementing the `user_profiles` balance and writing to `ledgers` (type: `meta_refund`).

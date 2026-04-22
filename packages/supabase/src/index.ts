@@ -14,7 +14,7 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Verify a Supabase JWT and return uid + email (replaces firebase auth.verifyIdToken)
+// Verify a Supabase JWT and return uid + email (replaces traditional auth verification)
 export async function verifySupabaseJwt(token: string): Promise<{ uid: string; email?: string }> {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data.user) {

@@ -39,7 +39,7 @@ app.use("/api", webhooksRouter);
 // QR endpoint - public (Google Slides servers need access)
 app.use("/api", qrRouter);
 
-// All other routes require Firebase Auth
+// All other routes require Auth
 app.use("/api", requireAuth, router);
 
 export default app;

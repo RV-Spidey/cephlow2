@@ -13,7 +13,7 @@
 ## Technical Standards
 - **Monorepo Structure:** Respect the **pnpm workspace** architecture. New features should be organized into either `apps/` or shared `packages/` as appropriate.
 - **Type Safety:** Maintain 100% **TypeScript** coverage. New API endpoints must be accompanied by updated **Zod schemas** and generated **API client hooks**.
-- **Auth Protocol:** Follow the existing **two-layer auth system**: Firebase Auth for identity and Google OAuth for API permissions (Drive, Gmail, etc.).
+- **Auth Protocol:** Follow the existing **two-layer auth system**: Supabase Auth for identity and Google OAuth for API permissions (Drive, Gmail, etc.).
 
 ## Delivery & Verification
 - **Multi-Channel Consistency:** When adding new delivery channels, ensure they provide similar feedback to the existing **Gmail and WhatsApp** flows.

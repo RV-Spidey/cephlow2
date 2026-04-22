@@ -108,7 +108,7 @@ export default function NewBatchWizard() {
     // Build the categorySlideMap including the default mapping
     const finalSlideMap: Record<string, number> = { ...categorySlideMap };
     if (multiTemplateMode) {
-      // Use sentinel key for default (Firestore reserves __ prefixed names)
+      // Use sentinel key for default
       finalSlideMap["_default"] = defaultSlideIndex;
     }
 

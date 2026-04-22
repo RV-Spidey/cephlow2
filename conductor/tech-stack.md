@@ -21,7 +21,7 @@
 
 ## Backend (api-server)
 - **Express.js:** Web framework for handling API routes and middleware.
-- **Firebase Cloud Functions:** Serves as the primary deployment target for the backend Express app.
+- **Render.com:** Serves as the primary deployment target for the backend Express app.
 - **Google OAuth 2.0:** Manages user permissions for accessing Drive, Sheets, Slides, and Gmail.
 
 ## Database & Storage
@@ -37,6 +37,4 @@
 - **WhatsApp Business Cloud API:** Used for sending certificates via WhatsApp document templates.
 
 ## Deployment & DevOps
-- **Firebase Hosting:** Hosting for the React frontend.
-- **Firebase CLI:** Used for deploying functions and hosting.
-- **Render.com:** Alternative deployment platform for the backend and frontend.
+- **Render.com:** Primary deployment platform for the backend and frontend.
