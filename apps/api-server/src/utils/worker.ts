@@ -13,7 +13,7 @@ const LOCAL_OUTPUT_DIR = path.join(__dirname, '..', '..', 'local_output');
 
 // Read from env or fallback to (logical cores - 1) to leave room for the main event loop
 const THREAD_CONCURRENCY = parseInt(
-  process.env.CONCURRENCY_LIMIT|| Math.max(1, os.cpus().length - 1).toString(), 
+  process.env.WORKER_CONCURRENCY || Math.max(1, os.cpus().length - 1).toString(), 
   10
 );
 
