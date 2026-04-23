@@ -37,7 +37,7 @@ export async function generateCertificatePDF(
   replacements: Record<string, string>,
   qrCodeUrl?: string,
   slideIndex: number = 0
-): Promise<string> {
+): Promise<Uint8Array> {
   // 1. Get template config
   const { data: batch } = await supabaseAdmin
     .from("batches")
@@ -150,10 +150,6 @@ export async function generateCertificatePDF(
     });
   }
 
-  // 5. Save locally
-  const finalPdfBytes = await pdfDoc.save();
-  const outputPath = path.join(LOCAL_OUTPUT_DIR, `${certificateId}.pdf`);
-  fs.writeFileSync(outputPath, finalPdfBytes);
-
-  return outputPath;
+  // 5. Return bytes
+  return await pdfDoc.save();
 }
