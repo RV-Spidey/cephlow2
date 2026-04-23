@@ -1,8 +1,9 @@
 import { supabaseAdmin, toCamel } from '@workspace/supabase';
-import { generateCertificatePDF } from '../lib/pdfGenerator.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import os from 'os';
+import { Piscina } from 'piscina';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,11 +11,26 @@ const __dirname = path.dirname(__filename);
 // Path to local_output relative to this file
 const LOCAL_OUTPUT_DIR = path.join(__dirname, '..', '..', 'local_output');
 
-const CONCURRENCY_LIMIT = 10;
+// Read from env or fallback to (logical cores - 1) to leave room for the main event loop
+const CONCURRENCY_LIMIT = parseInt(
+  process.env.WORKER_CONCURRENCY || Math.max(1, os.cpus().length - 1).toString(), 
+  10
+);
+
 let activeTaskCount = 0;
+let totalCompleted = 0;
+
+// Initialize Piscina Pool
+// minThreads is set to match maxThreads to start all threads immediately as requested
+const pool = new Piscina({
+  filename: path.resolve(__dirname, 'pdf-worker.ts'),
+  minThreads: CONCURRENCY_LIMIT,
+  maxThreads: CONCURRENCY_LIMIT,
+  execArgv: ['--import', 'tsx']
+});
 
 export async function startWorker() {
-  console.log(`[WORKER] Starting LOCAL TEST processor (Concurrency: ${CONCURRENCY_LIMIT})...`);
+  console.log(`[WORKER] Starting THREAD POOL processor (Concurrency: ${CONCURRENCY_LIMIT})...`);
   
   // Ensure directory exists
   if (!fs.existsSync(LOCAL_OUTPUT_DIR)) {
@@ -32,6 +48,7 @@ async function pollTasks() {
 
   try {
     const limit = CONCURRENCY_LIMIT - activeTaskCount;
+    // grab_pending_tasks is an RPC that uses FOR UPDATE SKIP LOCKED
     const { data: rawTasks, error } = await supabaseAdmin.rpc('grab_pending_tasks', { p_limit: limit });
 
     if (error) {
@@ -42,82 +59,39 @@ async function pollTasks() {
 
     const tasks = rawTasks || [];
     if (tasks.length === 0) {
+      if (activeTaskCount === 0) {
+        // console.log('[WORKER] 💤 Queue empty. Waiting for new tasks...');
+      }
       setTimeout(pollTasks, 2000);
       return;
     }
 
-    console.log(`[WORKER] Grabbed ${tasks.length} tasks. Processing locally...`);
+    console.log(`[WORKER] 🚀 Grabbed ${tasks.length} tasks. (Active: ${activeTaskCount}/${CONCURRENCY_LIMIT})`);
 
     for (const rawTask of tasks) {
       const task = toCamel(rawTask);
-      processTask(task);
+      
+      activeTaskCount++;
+      // Offload to thread pool
+      pool.run(task)
+        .then(() => {
+          totalCompleted++;
+          console.log(`[PROGRESS] 📊 Total Completed: ${totalCompleted}`);
+        })
+        .catch(err => {
+          // Errors are already handled inside pdf-worker.ts, but we catch pool-level errors here
+          console.error(`[WORKER] Pool execution error for task ${task.id}:`, err);
+        })
+        .finally(() => {
+          activeTaskCount--;
+        });
     }
     
+    // Quick poll for more tasks if capacity remains
     setTimeout(pollTasks, 100);
 
   } catch (err) {
     console.error('[WORKER] Polling error:', err);
     setTimeout(pollTasks, 5000);
-  }
-}
-
-async function processTask(task: any) {
-  activeTaskCount++;
-  
-  try {
-    if (task.type === 'generate') {
-      const payload = task.payload || {};
-      
-      const batchId = task.batchId || task.batch_id || payload.batchId || payload.batch_id;
-      const certificateId = task.certificateId || task.certificate_id || payload.certificateId || payload.certificate_id;
-      const recipientName = payload.recipientName || payload.recipient_name || 'Unknown';
-      const replacements = payload.replacements || {};
-      const qrCodeUrl = payload.qrCodeUrl || payload.qr_code_url;
-      const slideIndex = payload.slideIndex !== undefined ? payload.slideIndex : payload.slide_index;
-
-      console.log(`[LOCAL-TASK] Generating PDF for Cert: ${certificateId}`);
-      
-      if (!certificateId) throw new Error("Missing certificate_id in task");
-
-      // 1. Generate the PDF bytes
-      const pdfBytes = await generateCertificatePDF(
-        batchId,
-        certificateId,
-        recipientName,
-        replacements,
-        qrCodeUrl,
-        slideIndex || 0
-      );
-
-      // 2. Save locally
-      const fileName = `${recipientName.replace(/\s+/g, '_')}_${certificateId.substring(0, 8)}.pdf`;
-      const filePath = path.join(LOCAL_OUTPUT_DIR, fileName);
-      
-      fs.writeFileSync(filePath, pdfBytes);
-      console.log(`[LOCAL-TASK] Saved to: ${filePath}`);
-
-      // 3. Update DB with the local filename/path
-      await supabaseAdmin.from('certificates').update({
-        status: 'generated',
-        pdf_url: `local:///${fileName}`, // Marker for local testing
-        error_message: null
-      }).eq('id', certificateId);
-
-      await supabaseAdmin.from('tasks').update({
-        status: 'completed',
-        updated_at: new Date().toISOString()
-      }).eq('id', task.id);
-
-      console.log(`[LOCAL-TASK] Done: ${task.id}`);
-    }
-  } catch (error: any) {
-    console.error(`[LOCAL-TASK] Failed ${task.id}:`, error);
-    await supabaseAdmin.from('tasks').update({
-        status: 'failed',
-        error_message: error.message,
-        updated_at: new Date().toISOString()
-    }).eq('id', task.id);
-  } finally {
-    activeTaskCount--;
   }
 }
