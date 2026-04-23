@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { supabaseAdmin, toCamel, type Certificate } from "@workspace/supabase";
 import { getSheetsClient } from "../lib/googleSheets.js";
 import { generateCertificate, exportSlidesToPdf, createFolder, uploadPdf, makeFilePublic, deleteFile } from "../lib/googleDrive.js";
+import { extractTemplate, getTemplateConfig } from "../lib/pdfExtractor.js";
 import { sendEmail } from "../lib/gmail.js";
 import { uploadPdfToR2, isR2Configured, getR2PublicUrl, deleteR2Objects, deleteR2Object } from "../lib/cloudflareR2.js";
 import { isWhatsAppConfigured, sendWhatsAppDocument } from "../lib/whatsapp.js";
@@ -235,7 +236,18 @@ router.get("/batches/:batchId", async (req, res) => {
     if (error || !batch) return res.status(404).json({ error: "Batch not found" });
     if (batch.user_id !== userId) return res.status(403).json({ error: "Access denied" });
 
+    // Safety net: check tasks table for active generation (pending or processing)
+    const { count: taskCount, error: taskErr } = await supabaseAdmin
+      .from("tasks")
+      .select("*", { count: "exact", head: true })
+      .eq("batch_id", batchId)
+      .in("status", ["pending", "processing"]);
+
     const result = toCamel(batch);
+    if (!taskErr && (taskCount || 0) > 0) {
+      result.status = "generating";
+    }
+
     result.certificates = (batch.certificates || []).map(toCamel);
     return res.json(result);
   } catch (err: any) {
@@ -299,6 +311,7 @@ router.post("/batches/:batchId/sync", async (req, res) => {
       .eq("batch_id", batchId);
     const existingCerts = (certsData || []).map(toCamel) as Certificate[];
 
+    const upsertRows: any[] = [];
     let newCount = 0;
     let availableCerts = [...existingCerts];
 
@@ -306,14 +319,14 @@ router.post("/batches/:batchId/sync", async (req, res) => {
       const rowData: Record<string, string> = {};
       headers.forEach((h, i) => { rowData[h] = (row[i] as string) || ""; });
 
-      const email = rowData[emailColumn] || "";
-      const name = rowData[nameColumn] || "Unknown";
+      const email = (rowData[emailColumn] || "").trim();
+      const name = (rowData[nameColumn] || "Unknown").trim();
 
       let matchIndex = availableCerts.findIndex(
-        (c) => c.recipientEmail === email && c.recipientName === name
+        (c) => c.recipientEmail.toLowerCase() === email.toLowerCase() && c.recipientName === name
       );
       if (matchIndex === -1 && email) {
-        matchIndex = availableCerts.findIndex((c) => c.recipientEmail === email);
+        matchIndex = availableCerts.findIndex((c) => c.recipientEmail.toLowerCase() === email.toLowerCase());
       }
       if (matchIndex === -1 && name && name !== "Unknown") {
         matchIndex = availableCerts.findIndex((c) => c.recipientName === name);
@@ -324,28 +337,40 @@ router.post("/batches/:batchId/sync", async (req, res) => {
         availableCerts.splice(matchIndex, 1);
 
         const visualFields = Object.values(batch.column_map || {}) as string[];
-        const hasVisualChanged = matchingCert.recipientName !== name ||
-          visualFields.some(col => matchingCert.rowData?.[col] !== rowData[col]);
-        const hasMetadataChanged = !hasVisualChanged && JSON.stringify(matchingCert.rowData) !== JSON.stringify(rowData);
-
-        const updateData: any = {
-          recipient_name: name,
-          recipient_email: email,
-          row_data: rowData,
-          updated_at: new Date().toISOString(),
+        
+        // Robust value comparison helper: trims and handles nulls
+        const getValue = (obj: any, key: string) => {
+          const val = obj?.[key];
+          return (val === null || val === undefined) ? "" : String(val).trim();
         };
 
-        if (hasVisualChanged && ["generated", "sent", "outdated"].includes(matchingCert.status)) {
-          updateData.status = "outdated";
-          updateData.requires_visual_regen = true;
-        } else if (hasMetadataChanged && ["generated", "sent", "outdated"].includes(matchingCert.status)) {
-          updateData.status = "outdated";
-          updateData.requires_visual_regen = false;
-        }
+        const hasVisualChanged = matchingCert.recipientName !== name ||
+          visualFields.some(col => getValue(matchingCert.rowData, col) !== getValue(rowData, col));
+        
+        // Metadata change: any non-visual field in rowData changed
+        const hasMetadataChanged = !hasVisualChanged && headers.some(h => getValue(matchingCert.rowData, h) !== getValue(rowData, h));
 
-        await supabaseAdmin.from("certificates").update(updateData).eq("id", matchingCert.id);
+        if (hasVisualChanged || hasMetadataChanged) {
+          const rowUpdate: any = {
+            id: matchingCert.id,
+            batch_id: batchId,
+            recipient_name: name,
+            recipient_email: email,
+            row_data: rowData,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (hasVisualChanged && ["generated", "sent", "outdated"].includes(matchingCert.status)) {
+            rowUpdate.status = "outdated";
+            rowUpdate.requires_visual_regen = true;
+          } else if (hasMetadataChanged && ["generated", "sent", "outdated"].includes(matchingCert.status)) {
+            rowUpdate.status = "outdated";
+            rowUpdate.requires_visual_regen = false;
+          }
+          upsertRows.push(rowUpdate);
+        }
       } else {
-        await supabaseAdmin.from("certificates").insert({
+        upsertRows.push({
           batch_id: batchId,
           recipient_name: name,
           recipient_email: email,
@@ -361,6 +386,13 @@ router.post("/batches/:batchId/sync", async (req, res) => {
         });
         newCount++;
       }
+    }
+
+    if (upsertRows.length > 0) {
+      const { error: upsertErr } = await supabaseAdmin
+        .from("certificates")
+        .upsert(upsertRows, { onConflict: 'id' });
+      if (upsertErr) throw upsertErr;
     }
 
     if (newCount > 0) {
@@ -396,6 +428,18 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     const batch = toCamel(batchRow) as any;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
+    // Phase 1: Ensure template config exists
+    try {
+      const existingConfig = await getTemplateConfig(batch.templateId);
+      if (!existingConfig) {
+        console.log(`[GENERATE] Template config missing for ${batch.templateId}. Extracting...`);
+        await extractTemplate(userId, batch.templateId);
+      }
+    } catch (extractErr: any) {
+      console.error("[GENERATE] Template extraction failed:", extractErr);
+      return res.status(500).json({ error: `Template setup failed: ${extractErr.message}` });
+    }
+
     const { data: certsData } = await supabaseAdmin
       .from("certificates")
       .select("*")
@@ -411,7 +455,7 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     }
 
     const unpaidCerts = targetCerts.filter(c => !c.isPaid);
-    const visualRegenCerts = targetCerts.filter(c => c.isPaid && c.status === "outdated" && c.requiresVisualRegen);
+    const visualRegenCerts = targetCerts.filter(c => c.isPaid); // For testing: treat all paid certs as regeneration candidates
 
     const unpaidCount = unpaidCerts.length;
     const visualRegenCount = visualRegenCerts.length;
@@ -450,9 +494,16 @@ router.post("/batches/:batchId/generate", async (req, res) => {
       throw rpcErr;
     }
 
-    res.json({ success: true, message: "Generation started" });
+    // Start the async processing
+
 
     // 1. Prepare tasks for the target certificates
+    const targetIds = targetCerts.map(c => c.id);
+    // Cleanup any existing tasks for these certificates to avoid duplicates or zombie failed tasks
+    if (targetIds.length > 0) {
+        await supabaseAdmin.from("tasks").delete().in("certificate_id", targetIds);
+    }
+
     const tasks = targetCerts.map((cert) => {
       const rowData = (cert.rowData as Record<string, string>) || {};
       const replacements: Record<string, string> = {};
@@ -496,7 +547,8 @@ router.post("/batches/:batchId/generate", async (req, res) => {
           qrCodeUrl,
           slideIndex: certSlideIndex,
           batchName: batch.name,
-          recipientEmail: cert.recipientEmail
+          recipientEmail: cert.recipientEmail,
+          recipientPhone: extractPhoneNumber(rowData)
         },
         status: "pending"
       };
@@ -510,14 +562,20 @@ router.post("/batches/:batchId/generate", async (req, res) => {
 
       if (taskErr) {
         console.error("[GENERATE] Failed to insert tasks:", taskErr);
-        // Fallback: at least try to mark the batch as draft if task insertion failed
         await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
       } else {
-        console.log(`[GENERATE] Successfully queued ${tasks.length} tasks for batch ${batchId}`);
+        // Update batch status to generating
+        await supabaseAdmin.from("batches").update({ status: "generating" }).eq("id", batchId);
+
+        // Reset target certificates to pending status
+        if (targetCerts.length > 0) {
+          const targetIds = targetCerts.map(c => c.id);
+          await supabaseAdmin.from("certificates").update({ status: "pending", error_message: null }).in("id", targetIds);
+        }
       }
     }
 
-    return;
+    return res.json({ success: true, message: "Generation started" });
   } catch (err: any) {
     console.error("[GENERATE] Initial request failed:", err);
     try {
@@ -602,8 +660,12 @@ router.post("/batches/:batchId/send", async (req, res) => {
 
     const alreadySent = allCerts.filter(c => c.status === "sent").length;
     const totalSent = sent + alreadySent;
-    const newStatus = failed === 0 ? "sent" : totalSent > 0 ? "partial" : "generated";
-    await supabaseAdmin.from("batches").update({ status: newStatus, sent_count: totalSent }).eq("id", batchId);
+    
+    // Update batch stats and set status back to draft
+    await supabaseAdmin.from("batches").update({ 
+      status: "draft", 
+      sent_count: totalSent 
+    }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} emails. ${failed} failed.`, processed: sent, failed });
   } catch (err: any) {
@@ -689,16 +751,17 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
 
     const alreadySent = allCerts.filter(c => c.status === "sent").length;
     const totalSent = sent + alreadySent;
-    const newStatus = failed === 0 ? "sent" : totalSent > 0 ? "partial" : "generated";
+    
+    // Update batch stats and set status back to draft
     await supabaseAdmin.from("batches").update({
-      status: newStatus,
+      status: "draft",
       sent_count: totalSent,
       whatsapp_sent_count: (batch.whatsappSentCount || 0) + sent,
     }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} WhatsApp messages. ${failed} failed.`, processed: sent, failed });
   } catch (err: any) {
-    await supabaseAdmin.from("batches").update({ status: "generated" }).eq("id", batchId);
+    await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
     return res.status(500).json({ error: err.message });
   }
 });
