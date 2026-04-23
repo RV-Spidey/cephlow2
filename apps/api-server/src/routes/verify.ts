@@ -7,28 +7,40 @@ const router: IRouter = Router();
 
 // Public endpoint — no auth required
 router.get("/verify/:batchId/:certId", async (req, res) => {
-  try {
-    const { batchId, certId } = req.params;
+  const { batchId, certId } = req.params;
+  console.log(`[VERIFY] Request for batchId=${batchId}, certId=${certId}`);
 
+  try {
     const { data, error } = await supabaseAdmin
       .from("certificates")
       .select("*, batches(name)")
       .eq("id", certId)
-      .eq("batch_id", batchId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      res.status(404).json({ error: "Certificate not found" });
-      return;
+    if (error) {
+      console.error(`[VERIFY] DB Error:`, error.message);
+      return res.status(500).json({ error: "Internal server error during verification" });
+    }
+
+    if (!data) {
+      console.warn(`[VERIFY] Certificate not found: ${certId}`);
+      return res.status(404).json({ error: "Certificate record not found." });
+    }
+
+    // Verify that the batch ID matches if provided (Security check)
+    if (batchId && data.batch_id !== batchId) {
+        console.warn(`[VERIFY] Batch ID mismatch! URL has ${batchId}, DB has ${data.batch_id}`);
+        return res.status(400).json({ error: "Invalid verification link (Batch mismatch)." });
     }
 
     const { batches, ...cert } = data as any;
+    console.log(`[VERIFY] Success: Found cert for ${cert.recipient_name}, status=${cert.status}`);
 
     let r2PdfUrl = cert.r2_pdf_url || null;
     if (!r2PdfUrl && cert.recipient_name) {
-      const safeName = cert.recipient_name.replace(/[^a-zA-Z0-9]/g, "_");
-      const reconstructedKey = `${safeName}/${safeName}_certificate.pdf`;
-      r2PdfUrl = getR2PublicUrl(reconstructedKey);
+      const fileName = `${cert.recipient_name.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}_${certId.substring(0, 8)}.pdf`;
+      const key = `certificates/${batchId}/${fileName}`;
+      r2PdfUrl = getR2PublicUrl(key);
     }
 
     res.json({

@@ -59,8 +59,8 @@ async function processTask(task: any) {
     }
 
     const duration = Date.now() - start;
-    const endToEndDuration = Date.now() - requestStartTime;
-    console.log(`[CERT] ✅ Fully Processed: ${recipientName} (Worker: ${duration}ms, End-to-End: ${endToEndDuration}ms)`);
+    const endToEndDuration = requestStartTime ? (Date.now() - requestStartTime) : duration;
+    console.log(`[CERT] ✅ Fully Processed: ${recipientName} [Batch: ${batchId}] (Worker: ${duration}ms, End-to-End: ${endToEndDuration}ms)`);
     
     // 3. Update DB
     try {
