@@ -546,7 +546,13 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, generated, sent, failed]
+          enum: [pending, generating, generated, sent, failed, outdated]
+        requiresVisualRegen:
+          type: boolean
+        whatsappStatus:
+          type: string
+        whatsappMessageId:
+          type: string
         slideFileId:
           type: string
         slideUrl:
