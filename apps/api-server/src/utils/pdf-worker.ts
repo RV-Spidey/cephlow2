@@ -32,7 +32,7 @@ async function processTask(task: any) {
     }).eq('id', certificateId);
 
     // 1. Generate the PDF bytes
-    const pdfBytes = await generateCertificatePDF(
+    const pdfBytesUint8 = await generateCertificatePDF(
       batchId,
       certificateId,
       recipientName,
@@ -40,6 +40,7 @@ async function processTask(task: any) {
       qrCodeUrl,
       slideIndex || 0
     );
+    const pdfBytes = Buffer.from(pdfBytesUint8);
 
     const fileName = `${recipientName.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_')}_${certificateId.substring(0, 8)}.pdf`;
     
