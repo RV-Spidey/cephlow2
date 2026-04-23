@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOCAL_OUTPUT_DIR = path.join(__dirname, '..', '..', 'local_output');
 
-export default async function (task: any) {
+async function processTask(task: any) {
   try {
     const payload = task.payload || {};
     const batchId = task.batchId || task.batch_id || payload.batchId || payload.batch_id;
@@ -79,6 +79,10 @@ export default async function (task: any) {
     } catch (e) {
         console.error(`[THREAD-WORKER] Critical DB error while marking task failure:`, e);
     }
-    throw error;
+    return { success: false, taskId: task.id, error: error.message };
   }
+}
+
+export default async function (tasks: any[]) {
+  return Promise.all(tasks.map(task => processTask(task)));
 }

@@ -12,25 +12,26 @@ const __dirname = path.dirname(__filename);
 const LOCAL_OUTPUT_DIR = path.join(__dirname, '..', '..', 'local_output');
 
 // Read from env or fallback to (logical cores - 1) to leave room for the main event loop
-const CONCURRENCY_LIMIT = parseInt(
+const THREAD_CONCURRENCY = parseInt(
   process.env.WORKER_CONCURRENCY || Math.max(1, os.cpus().length - 1).toString(), 
   10
 );
 
-let activeTaskCount = 0;
+const ASYNC_CONCURRENCY = 10;
+let activeThreadCount = 0;
 let totalCompleted = 0;
 
 // Initialize Piscina Pool
 // minThreads is set to match maxThreads to start all threads immediately as requested
 const pool = new Piscina({
   filename: path.resolve(__dirname, 'pdf-worker.ts'),
-  minThreads: CONCURRENCY_LIMIT,
-  maxThreads: CONCURRENCY_LIMIT,
+  minThreads: THREAD_CONCURRENCY,
+  maxThreads: THREAD_CONCURRENCY,
   execArgv: ['--import', 'tsx']
 });
 
 export async function startWorker() {
-  console.log(`[WORKER] Starting THREAD POOL processor (Concurrency: ${CONCURRENCY_LIMIT})...`);
+  console.log(`[WORKER] Starting THREAD POOL processor (Threads: ${THREAD_CONCURRENCY}, Async/Thread: ${ASYNC_CONCURRENCY})...`);
   
   // Ensure directory exists
   if (!fs.existsSync(LOCAL_OUTPUT_DIR)) {
@@ -41,13 +42,14 @@ export async function startWorker() {
 }
 
 async function pollTasks() {
-  if (activeTaskCount >= CONCURRENCY_LIMIT) {
+  if (activeThreadCount >= THREAD_CONCURRENCY) {
     setTimeout(pollTasks, 500);
     return;
   }
 
   try {
-    const limit = CONCURRENCY_LIMIT - activeTaskCount;
+    const availableThreads = THREAD_CONCURRENCY - activeThreadCount;
+    const limit = availableThreads * ASYNC_CONCURRENCY;
     // grab_pending_tasks is an RPC that uses FOR UPDATE SKIP LOCKED
     const { data: rawTasks, error } = await supabaseAdmin.rpc('grab_pending_tasks', { p_limit: limit });
 
@@ -59,31 +61,37 @@ async function pollTasks() {
 
     const tasks = rawTasks || [];
     if (tasks.length === 0) {
-      if (activeTaskCount === 0) {
+      if (activeThreadCount === 0) {
         // console.log('[WORKER] 💤 Queue empty. Waiting for new tasks...');
       }
       setTimeout(pollTasks, 2000);
       return;
     }
 
-    console.log(`[WORKER] 🚀 Grabbed ${tasks.length} tasks. (Active: ${activeTaskCount}/${CONCURRENCY_LIMIT})`);
+    console.log(`[WORKER] 🚀 Grabbed ${tasks.length} tasks. (Active Threads: ${activeThreadCount}/${THREAD_CONCURRENCY})`);
 
-    for (const rawTask of tasks) {
-      const task = toCamel(rawTask);
+    // Chunk tasks into groups of ASYNC_CONCURRENCY
+    const chunks: any[][] = [];
+    for (let i = 0; i < tasks.length; i += ASYNC_CONCURRENCY) {
+      chunks.push(tasks.slice(i, i + ASYNC_CONCURRENCY));
+    }
+
+    for (const rawChunk of chunks) {
+      const chunk = rawChunk.map((t) => toCamel(t));
       
-      activeTaskCount++;
-      // Offload to thread pool
-      pool.run(task)
+      activeThreadCount++;
+      // Offload batch to thread pool
+      pool.run(chunk)
         .then(() => {
-          totalCompleted++;
+          totalCompleted += chunk.length;
           console.log(`[PROGRESS] 📊 Total Completed: ${totalCompleted}`);
         })
         .catch(err => {
           // Errors are already handled inside pdf-worker.ts, but we catch pool-level errors here
-          console.error(`[WORKER] Pool execution error for task ${task.id}:`, err);
+          console.error(`[WORKER] Pool execution error for batch:`, err);
         })
         .finally(() => {
-          activeTaskCount--;
+          activeThreadCount--;
         });
     }
     
