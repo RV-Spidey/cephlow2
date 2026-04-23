@@ -33,7 +33,33 @@ const pool = new Piscina({
 export async function startWorker() {
   console.log(`[WORKER] Starting THREAD POOL processor (Threads: ${THREAD_CONCURRENCY}, Async/Thread: ${ASYNC_CONCURRENCY})...`);
   
-  // Ensure directory exists
+  // 1. Recovery: Reset tasks stuck in 'processing' due to server crash
+  try {
+      const { data: stuckTasks } = await supabaseAdmin
+        .from('tasks')
+        .select('id, certificate_id')
+        .eq('status', 'processing');
+      
+      if (stuckTasks && stuckTasks.length > 0) {
+          console.log(`[WORKER] 🛠️ Recovering ${stuckTasks.length} stuck tasks...`);
+          
+          const taskIds = stuckTasks.map(t => t.id);
+          const certIds = stuckTasks.map(t => t.certificate_id).filter(Boolean);
+
+          // Reset tasks to pending
+          await supabaseAdmin.from('tasks').update({ status: 'pending' }).in('id', taskIds);
+          
+          // Reset certificates to pending
+          if (certIds.length > 0) {
+              await supabaseAdmin.from('certificates').update({ status: 'pending' }).in('id', certIds);
+          }
+          console.log(`[WORKER] ✅ Recovery complete.`);
+      }
+  } catch (err) {
+      console.error('[WORKER] Recovery error:', err);
+  }
+
+  // 2. Ensure directory exists
   if (!fs.existsSync(LOCAL_OUTPUT_DIR)) {
     fs.mkdirSync(LOCAL_OUTPUT_DIR, { recursive: true });
   }
