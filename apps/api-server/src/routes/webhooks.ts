@@ -29,28 +29,45 @@ router.get("/webhooks/whatsapp", (req, res) => {
 
 // POST /api/webhooks/whatsapp — Meta delivers status updates here
 router.post("/webhooks/whatsapp", async (req, res) => {
+  // Send 200 OK immediately as required by Meta
   res.sendStatus(200);
 
   try {
     const body = req.body;
-    if (body?.object !== "whatsapp_business_account") return;
+    
+    // Log the entire body for debugging
+    console.log("[WhatsApp Webhook] Received payload:", JSON.stringify(body));
+
+    if (body?.object !== "whatsapp_business_account") {
+      console.log("[WhatsApp Webhook] Object type mismatch:", body?.object);
+      return;
+    }
 
     for (const entry of body?.entry ?? []) {
       for (const change of entry?.changes ?? []) {
-        if (change?.field !== "messages") continue;
+        if (change?.field !== "messages") {
+          console.log("[WhatsApp Webhook] Field mismatch:", change?.field);
+          continue;
+        }
 
+        // Status updates (sent, delivered, read, failed)
         for (const status of change?.value?.statuses ?? []) {
           const wamid: string = status?.id;
           const rawStatus: string = status?.status;
 
           if (!wamid || !rawStatus) continue;
 
+          console.log(`[WhatsApp Webhook] Processing status: wamid=${wamid} rawStatus=${rawStatus}`);
+
           const waStatus = rawStatus === "read" ? "read"
             : rawStatus === "delivered" ? "delivered"
             : rawStatus === "failed" ? "wa_failed"
             : null;
 
-          if (!waStatus) continue;
+          if (!waStatus) {
+            console.log(`[WhatsApp Webhook] Skipping status update for rawStatus: ${rawStatus}`);
+            continue;
+          }
 
           const { data: msgRow } = await supabaseAdmin
             .from("wa_messages")
@@ -58,14 +75,26 @@ router.post("/webhooks/whatsapp", async (req, res) => {
             .eq("wamid", wamid)
             .maybeSingle();
 
-          if (!msgRow) continue;
+          if (!msgRow) {
+            console.warn(`[WhatsApp Webhook] wamid not found in DB: ${wamid}`);
+            continue;
+          }
 
-          await supabaseAdmin
+          const { error: updateErr } = await supabaseAdmin
             .from("certificates")
             .update({ whatsapp_status: waStatus })
             .eq("id", msgRow.cert_id);
 
-          console.log(`[WhatsApp Webhook] wamid=${wamid} status=${waStatus} cert=${msgRow.cert_id}`);
+          if (updateErr) {
+            console.error(`[WhatsApp Webhook] DB update failed:`, updateErr);
+          } else {
+            console.log(`[WhatsApp Webhook] Updated cert ${msgRow.cert_id} to ${waStatus}`);
+          }
+        }
+
+        // Incoming messages (could be used for reporting issues)
+        if (change?.value?.messages) {
+          console.log("[WhatsApp Webhook] Received incoming message(s):", change.value.messages.length);
         }
       }
     }

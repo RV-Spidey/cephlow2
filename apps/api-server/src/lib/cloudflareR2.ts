@@ -60,7 +60,7 @@ export async function uploadPdfToR2(
   }
 
   const client = getR2Client(config);
-  const safeFolderName = folderName.replace(/[^a-zA-Z0-9+\-_.]/g, "_");
+  const safeFolderName = folderName.replace(/[^a-zA-Z0-9+\-_./]/g, "_");
   const safeFileName = fileName.replace(/[^a-zA-Z0-9+\-_.]/g, "_");
   const key = `${safeFolderName}/${safeFileName.endsWith(".pdf") ? safeFileName : `${safeFileName}.pdf`}`;
 

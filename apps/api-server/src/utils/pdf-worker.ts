@@ -48,7 +48,8 @@ async function processTask(task: any) {
     if (isR2Configured()) {
         try {
             const uploadStart = Date.now();
-            const folderName = `certificates/${batchId}`;
+            const phone = payload.recipientPhone || payload.recipient_phone;
+            const folderName = phone ? phone : batchId;
             const r2Key = await uploadPdfToR2(folderName, fileName, pdfBytes);
             r2Url = getR2PublicUrl(r2Key);
             const uploadDuration = Date.now() - uploadStart;

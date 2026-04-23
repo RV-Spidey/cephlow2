@@ -547,7 +547,8 @@ router.post("/batches/:batchId/generate", async (req, res) => {
           qrCodeUrl,
           slideIndex: certSlideIndex,
           batchName: batch.name,
-          recipientEmail: cert.recipientEmail
+          recipientEmail: cert.recipientEmail,
+          recipientPhone: extractPhoneNumber(rowData)
         },
         status: "pending"
       };
