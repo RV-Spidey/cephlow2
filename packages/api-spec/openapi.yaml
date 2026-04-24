@@ -557,6 +557,10 @@ components:
           type: string
         slideUrl:
           type: string
+        pdfUrl:
+          type: string
+        r2PdfUrl:
+          type: string
         sentAt:
           type: string
         errorMessage:

@@ -12,7 +12,9 @@ import {
   useGenerateSmartBatch,
   useSyncBatch,
   useGetWalletBalance,
+  type Certificate,
 } from "@workspace/api-client-react";
+import { WhatsAppReport } from "@/types";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -200,10 +202,10 @@ export default function BatchDetail() {
   const [waVar3, setWaVar3] = useState("<<EmailPrefix>>");
 
   // Individual certificate send
-  const [indivEmailCert, setIndivEmailCert] = useState<any | null>(null);
+  const [indivEmailCert, setIndivEmailCert] = useState<Certificate | null>(null);
   const [indivEmailSubject, setIndivEmailSubject] = useState("");
   const [indivEmailBody, setIndivEmailBody] = useState("");
-  const [indivWaCert, setIndivWaCert] = useState<any | null>(null);
+  const [indivWaCert, setIndivWaCert] = useState<Certificate | null>(null);
   const [indivWaVar1, setIndivWaVar1] = useState("");
   const [indivWaVar2, setIndivWaVar2] = useState("");
   const [indivWaVar3, setIndivWaVar3] = useState("<<EmailPrefix>>");
@@ -230,21 +232,20 @@ export default function BatchDetail() {
     },
   });
 
-  const handleOpenIndivEmail = (cert: any) => {
+  const handleOpenIndivEmail = (cert: Certificate) => {
     setIndivEmailCert(cert);
     setIndivEmailSubject((batch as any).emailSubject || "");
     setIndivEmailBody((batch as any).emailBody || "");
   };
 
-  const handleOpenIndivWa = (cert: any) => {
+  const handleOpenIndivWa = (cert: Certificate) => {
     setIndivWaCert(cert);
     setIndivWaVar1((batch as any).nameColumn ? `<<${(batch as any).nameColumn}>>` : "");
     setIndivWaVar2((batch as any).name || "");
   };
 
-  interface ReportDetail { message: string; phone: string; created_at: string; }
-  const [reportsByCertKey, setReportsByCertKey] = useState<Map<string, ReportDetail>>(new Map());
-  const [activeReport, setActiveReport] = useState<{ cert: any; report: ReportDetail } | null>(null);
+  const [reportsByCertKey, setReportsByCertKey] = useState<Map<string, WhatsAppReport>>(new Map());
+  const [activeReport, setActiveReport] = useState<{ cert: Certificate; report: WhatsAppReport } | null>(null);
 
   useEffect(() => {
     const workerUrl = import.meta.env.VITE_WA_WORKER_URL?.replace(/\/$/, '');
@@ -252,9 +253,9 @@ export default function BatchDetail() {
     if (!workerUrl || !token) return;
     fetch(`${workerUrl}/reports?token=${token}`)
       .then(r => r.json())
-      .then((data: { cert_key?: string; message: string; phone: string; created_at: string }[]) => {
-        const map = new Map<string, ReportDetail>();
-        data.filter(r => r.cert_key).forEach(r => map.set(r.cert_key!, { message: r.message, phone: r.phone, created_at: r.created_at }));
+      .then((data: WhatsAppReport[]) => {
+        const map = new Map<string, WhatsAppReport>();
+        data.filter(r => r.cert_key).forEach(r => map.set(r.cert_key!, r));
         setReportsByCertKey(map);
       })
       .catch(() => {});
@@ -275,15 +276,15 @@ export default function BatchDetail() {
     setWaModalOpen(true);
   };
 
-  const getCertKey = (cert: any): string | null => {
+  const getCertKey = (cert: Certificate): string | null => {
     if (!cert.r2PdfUrl) return null;
     try { return decodeURIComponent(new URL(cert.r2PdfUrl).pathname.slice(1)); } catch { return null; }
   };
-  const certHasReport = (cert: any): boolean => {
+  const certHasReport = (cert: Certificate): boolean => {
     const key = getCertKey(cert);
     return !!key && reportsByCertKey.has(key);
   };
-  const getCertReport = (cert: any): ReportDetail | null => {
+  const getCertReport = (cert: Certificate): WhatsAppReport | null => {
     const key = getCertKey(cert);
     return key ? (reportsByCertKey.get(key) ?? null) : null;
   };

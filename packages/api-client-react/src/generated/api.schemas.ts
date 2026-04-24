@@ -111,17 +111,25 @@ export const CertificateStatus = {
 export type CertificateRowData = { [key: string]: string };
 
 export interface Certificate {
-  id: number;
-  batchId: number;
+  id: any;
+  batchId: any;
   recipientName: string;
   recipientEmail: string;
-  status: CertificateStatus;
+  status: CertificateStatus | string;
   slideFileId?: string;
   slideUrl?: string;
+  pdfFileId?: string;
+  pdfUrl?: string;
+  r2PdfUrl?: string;
   sentAt?: string;
   errorMessage?: string;
   rowData?: CertificateRowData;
+  isPaid?: boolean;
+  requiresVisualRegen?: boolean;
+  whatsappStatus?: string;
+  whatsappMessageId?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type BatchDetail = Batch & {

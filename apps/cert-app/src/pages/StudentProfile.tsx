@@ -6,24 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-
-interface ProfileCert {
-  certId: string;
-  batchId: string;
-  batchName: string;
-  recipientName: string;
-  r2PdfUrl: string | null;
-  pdfUrl: string | null;
-  slideUrl: string | null;
-  issuedAt: string | null;
-  status: string;
-}
-
-interface ProfileData {
-  slug: string;
-  name: string;
-  certificates: ProfileCert[];
-}
+import { ProfileData, ProfileCert } from "@/types";
 
 export default function StudentProfile() {
   const [, params] = useRoute("/:username");

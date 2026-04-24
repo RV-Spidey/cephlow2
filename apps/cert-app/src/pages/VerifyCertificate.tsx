@@ -13,17 +13,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-interface CertData {
-  id: string;
-  recipientName: string;
-  status: string;
-  batchName: string;
-  issuedAt: string | null;
-  r2PdfUrl: string | null;
-  pdfUrl: string | null;
-  slideUrl: string | null;
-}
+import { VerifyCertData } from "@/types";
 
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
   return (
@@ -44,7 +34,7 @@ export default function VerifyCertificate() {
   const batchId = params?.batchId ?? "";
   const certId  = params?.certId  ?? "";
 
-  const [cert, setCert]     = useState<CertData | null>(null);
+  const [cert, setCert]     = useState<VerifyCertData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
 

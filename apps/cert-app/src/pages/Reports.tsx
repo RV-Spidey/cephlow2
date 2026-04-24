@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, MessageSquareWarning } from "lucide-react";
-
-interface Report {
-  id: number;
-  phone: string;
-  cert_key?: string;
-  message: string;
-  created_at: string;
-}
+import { WhatsAppReport } from "@/types";
 
 function maskPhone(phone: string) {
   if (!phone || phone.length <= 4) return "****";
@@ -16,7 +9,7 @@ function maskPhone(phone: string) {
 }
 
 export default function Reports() {
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<WhatsAppReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +24,7 @@ export default function Reports() {
     }
     fetch(`${workerUrl.replace(/\/$/, '')}/reports?token=${token}`)
       .then(r => r.json())
-      .then((data: Report[]) => setReports(data))
+      .then((data: WhatsAppReport[]) => setReports(data))
       .catch(() => setError("Failed to load reports."))
       .finally(() => setLoading(false));
   }, [workerUrl, token]);
