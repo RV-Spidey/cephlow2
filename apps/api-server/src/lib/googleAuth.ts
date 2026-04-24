@@ -63,6 +63,18 @@ export async function handleCallback(code: string, state: string): Promise<void>
   });
 }
 
+export async function clearGoogleToken(uid: string): Promise<void> {
+  await supabaseAdmin.from("user_google_tokens").delete().eq("user_id", uid);
+}
+
+export function isInvalidGrantError(err: any): boolean {
+  const errorData = err?.response?.data || err?.data || {};
+  return (
+    (err?.status === 400 || err?.code === "400" || err?.response?.status === 400) &&
+    (errorData.error === "invalid_grant" || (typeof errorData.error_description === "string" && errorData.error_description.includes("expired or revoked")))
+  );
+}
+
 export async function hasGoogleToken(uid: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("user_google_tokens")

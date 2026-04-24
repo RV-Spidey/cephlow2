@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { supabaseAdmin, toCamel, type Certificate, type Batch } from "@workspace/supabase";
 import { getSheetsClient } from "../lib/googleSheets.js";
+import { clearGoogleToken, isInvalidGrantError } from "../lib/googleAuth.js";
 import { exportSlidesToPdf, createFolder, makeFilePublic } from "../lib/googleDrive.js";
-import { extractTemplate, getTemplateConfig } from "../lib/pdfExtractor.js";
+import { extractTemplate, getTemplateConfig, getBlankPdfBytes, ensureTemplateInCache } from "../lib/pdfExtractor.js";
 import { sendEmail } from "../lib/gmail.js";
 import { isR2Configured, deleteR2Objects } from "../lib/cloudflareR2.js";
 import { isWhatsAppConfigured, sendWhatsAppDocument } from "../lib/whatsapp.js";
@@ -133,9 +134,10 @@ router.get("/batches", async (req, res) => {
 
 // Create a new batch
 router.post("/batches", async (req, res) => {
+  const userId = req.user?.uid;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
   try {
-    const userId = req.user?.uid;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const {
       name, sheetId, sheetName, tabName, templateId, templateName,
@@ -220,6 +222,10 @@ router.post("/batches", async (req, res) => {
 
     return res.status(201).json(toCamel(batchRow));
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(userId);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -409,6 +415,10 @@ router.post("/batches/:batchId/sync", async (req, res) => {
     return res.json({ success: true, message: `Synced successfully. Added ${newCount} new certificates.`, newCount });
   } catch (err: unknown) {
     console.error("[SYNC] failed:", err);
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(userId);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -432,15 +442,17 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
-    // Phase 1: Ensure template config exists
+    // Phase 1: Ensure template config is in memory (concurrent-safe)
     try {
-      const existingConfig = await getTemplateConfig(batch.templateId);
-      if (!existingConfig) {
-        console.log(`[GENERATE] Template config missing for ${batch.templateId}. Extracting...`);
-        await extractTemplate(userId, batch.templateId);
-      }
+      await ensureTemplateInCache(userId, batch.templateId);
     } catch (extractErr: any) {
       console.error("[GENERATE] Template extraction failed:", extractErr);
+      if (isInvalidGrantError(extractErr)) {
+        await clearGoogleToken(userId);
+        return res.status(401).json({ 
+          error: "Google account connection has expired. Please reconnect your Google account via the dashboard." 
+        });
+      }
       return res.status(500).json({ error: `Template setup failed: ${extractErr.message}` });
     }
 
@@ -673,6 +685,10 @@ router.post("/batches/:batchId/send", async (req, res) => {
 
     return res.json({ success: failed === 0, message: `Sent ${sent} emails. ${failed} failed.`, processed: sent, failed });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(userId);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -819,6 +835,10 @@ router.post("/batches/:batchId/certificates/:certId/send", async (req, res) => {
 
     return res.json({ success: true, message: `Certificate sent to ${cert.recipientEmail}` });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(userId);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     await supabaseAdmin.from("certificates").update({ status: "failed", error_message: (err instanceof Error ? err.message : String(err)) }).eq("id", certId);
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }

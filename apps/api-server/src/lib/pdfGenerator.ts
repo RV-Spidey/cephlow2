@@ -4,13 +4,11 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import { supabaseAdmin } from "@workspace/supabase";
-import { getTemplateConfig, TemplateConfig, PlaceholderConfig } from "./pdfExtractor.js";
+import { getTemplateConfig, getBlankPdfBytes, TemplateConfig, PlaceholderConfig } from "./pdfExtractor.js";
 
-const LOCAL_OUTPUT_DIR = path.resolve("local_output");
 const FONTS_DIR = path.resolve("assets/fonts");
 
-// In-Memory Caches
-const templateCache = new Map<string, Buffer>();
+// ── In-memory font cache (loaded from disk once, reused for the process lifetime)
 const fontCache = new Map<string, Buffer>();
 
 function getStandardFont(fontFamily: string): StandardFonts | null {
@@ -30,6 +28,23 @@ function getStandardFont(fontFamily: string): StandardFonts | null {
   return null;
 }
 
+/**
+ * Loads a font into the in-memory cache.
+ * Reads from local disk (which was populated during extractTemplate).
+ */
+function loadFontToMemory(fontFamily: string): Buffer | null {
+  const fontPath = path.join(FONTS_DIR, `${fontFamily}.ttf`);
+  const cached = fontCache.get(fontPath);
+  if (cached) return cached;
+
+  if (fs.existsSync(fontPath)) {
+    const bytes = fs.readFileSync(fontPath);
+    fontCache.set(fontPath, bytes);
+    return bytes;
+  }
+  return null;
+}
+
 export async function generateCertificatePDF(
   batchId: string,
   certificateId: string,
@@ -38,66 +53,59 @@ export async function generateCertificatePDF(
   qrCodeUrl?: string,
   slideIndex: number = 0
 ): Promise<Uint8Array> {
-  // 1. Get template config
+  // 1. Get template config (from in-memory cache)
   const { data: batch } = await supabaseAdmin
     .from("batches")
     .select("template_id")
     .eq("id", batchId)
     .single();
-  
+
   const templateId = batch?.template_id;
   if (!templateId) throw new Error("Template ID not found for batch");
 
-  const config = await getTemplateConfig(templateId);
-  if (!config) throw new Error(`Config not found for template ${templateId}`);
+  const config = getTemplateConfig(templateId);
+  if (!config) throw new Error(`Template config not found in memory for ${templateId}. Re-trigger generation.`);
 
   const slideConfig = config.slides[slideIndex];
   if (!slideConfig) throw new Error(`Config not found for slide index ${slideIndex} in template ${templateId}`);
 
-  // 2. Load blank PDF
-  let templatePdfBytes = templateCache.get(config.blankPdfPath);
-  if (!templatePdfBytes) {
-    templatePdfBytes = fs.readFileSync(path.resolve(config.blankPdfPath));
-    templateCache.set(config.blankPdfPath, templatePdfBytes);
-  }
+  // 2. Load blank PDF (from in-memory cache)
+  const templatePdfBytes = getBlankPdfBytes(templateId);
+  if (!templatePdfBytes) throw new Error(`Blank PDF not found in memory for template ${templateId}. Re-trigger generation.`);
+
   const templateDoc = await PDFDocument.load(templatePdfBytes);
-  
+
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const [copiedPage] = await pdfDoc.copyPages(templateDoc, [slideIndex]);
   const page = pdfDoc.addPage(copiedPage);
 
-  // 3. Draw Placeholders
+  // 3. Draw placeholders
   for (const placeholder of slideConfig.placeholders) {
     const rawPlaceholder = placeholder.name.trim();
     const isName = rawPlaceholder.toLowerCase() === "name";
-    
+
     let text = replacements[placeholder.name];
     if (text === undefined) text = replacements[rawPlaceholder];
     if (text === undefined) text = replacements[rawPlaceholder.toLowerCase()];
     if (text === undefined) text = replacements[`<<${rawPlaceholder}>>`];
     if (text === undefined) text = replacements[`{{${rawPlaceholder}}}`];
     if (text === undefined) text = isName ? recipientName : `{{${placeholder.name}}}`;
-    
-    // Ensure we don't pass undefined/null to drawText
+
     text = text || "";
-    if (text === "") continue; // Skip drawing if empty
-    
+    if (text === "") continue;
+
     let font;
     const stdFont = getStandardFont(placeholder.fontFamily);
     if (stdFont) {
       font = await pdfDoc.embedFont(stdFont);
     } else {
-      const fontPath = path.join(FONTS_DIR, `${placeholder.fontFamily}.ttf`);
-      if (fs.existsSync(fontPath)) {
-        let fontBytes = fontCache.get(fontPath);
-        if (!fontBytes) {
-          fontBytes = fs.readFileSync(fontPath);
-          fontCache.set(fontPath, fontBytes);
-        }
+      // Try to load from in-memory font cache (backed by local disk)
+      const fontBytes = loadFontToMemory(placeholder.fontFamily);
+      if (fontBytes) {
         font = await pdfDoc.embedFont(fontBytes);
       } else {
-        console.warn(`[PDF] Font ${placeholder.fontFamily} not found, falling back to Helvetica-Bold`);
+        console.warn(`[PDF] Font ${placeholder.fontFamily} not found on disk, falling back to Helvetica-Bold`);
         font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
       }
     }
@@ -111,7 +119,7 @@ export async function generateCertificatePDF(
       textWidth = font.widthOfTextAtSize(text, fontSize);
     }
 
-    // Alignment adjustment
+    // Alignment
     let x = placeholder.x;
     if (placeholder.alignment === "CENTER") {
       x = placeholder.x + (placeholder.width - textWidth) / 2;
@@ -120,9 +128,6 @@ export async function generateCertificatePDF(
     }
 
     // Map Slide box top to PDF baseline
-    // Google Slides uses a default top padding of 0.1 inches (~7.2 points)
-    // We approximate the ascender as 80% of the font size to prevent fonts with 
-    // large bounding boxes (like script fonts) from pushing the text down inconsistently.
     const topPadding = 7.2;
     const approxAscender = fontSize * 0.8;
     const pdfY = config.pageSize.height - (placeholder.y + topPadding + approxAscender);
@@ -140,7 +145,7 @@ export async function generateCertificatePDF(
   if (slideConfig.qrCode && qrCodeUrl) {
     const qrBuffer = await QRCode.toBuffer(qrCodeUrl, { margin: 0, width: 200 });
     const qrImage = await pdfDoc.embedPng(qrBuffer);
-    
+
     const qrPdfY = config.pageSize.height - slideConfig.qrCode.y - slideConfig.qrCode.size;
     page.drawImage(qrImage, {
       x: slideConfig.qrCode.x,

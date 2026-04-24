@@ -9,6 +9,7 @@ import {
   uploadPptxAsPresentation,
   getDriveClient,
 } from "../lib/googleDrive.js";
+import { clearGoogleToken, isInvalidGrantError } from "../lib/googleAuth.js";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,10 @@ router.get("/slides/:templateId/slides-info", async (req, res) => {
     const slidesInfo = await getSlidesInfo(req.user!.uid, req.params.templateId);
     return res.json({ slides: slidesInfo });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -26,6 +31,10 @@ router.get("/slides/templates", async (req, res) => {
     const templates = await listSlideTemplates(req.user!.uid);
     return res.json({ templates });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -46,6 +55,10 @@ router.post(
       const result = await uploadPptxAsPresentation(req.user!.uid, name, req.body);
       return res.status(201).json(result);
     } catch (err: unknown) {
+      if (isInvalidGrantError(err)) {
+        await clearGoogleToken(req.user!.uid);
+        return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+      }
       return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
     }
   }
@@ -64,6 +77,10 @@ router.post("/slides/templates", async (req, res) => {
     const result = await createSlidePresentation(req.user!.uid, name);
     return res.status(201).json(result);
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -73,6 +90,10 @@ router.get("/slides/:templateId/placeholders", async (req, res) => {
     const placeholders = await getSlidePlaceholders(req.user!.uid, req.params.templateId);
     return res.json({ placeholders });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -82,6 +103,10 @@ router.post("/slides/:templateId/qr-placeholder", async (req, res) => {
     await addQrCodePlaceholder(req.user!.uid, req.params.templateId);
     return res.status(200).json({ ok: true });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -113,6 +138,10 @@ router.get("/slides/thumbnail/:fileId", async (req, res) => {
     return res.send(Buffer.from(buffer));
   } catch (err: unknown) {
     console.error(`[THUMBNAIL] Error proxying ${req.params.fileId}:`, (err instanceof Error ? err.message : String(err)));
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });

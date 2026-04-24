@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { getSheetsClient, createSpreadsheetWithHeaders } from "../lib/googleSheets.js";
 import { listSheetFiles } from "../lib/googleDrive.js";
+import { clearGoogleToken, isInvalidGrantError } from "../lib/googleAuth.js";
 
 const router: IRouter = Router();
 
@@ -14,6 +15,10 @@ router.post("/sheets", async (req, res) => {
     const result = await createSpreadsheetWithHeaders(req.user!.uid, name, headers);
     return res.status(201).json(result);
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -23,6 +28,10 @@ router.get("/sheets", async (req, res) => {
     const files = await listSheetFiles(req.user!.uid);
     return res.json({ sheets: files });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
@@ -64,6 +73,10 @@ router.get("/sheets/:sheetId/data", async (req, res) => {
 
     return res.json({ headers, rows: dataRows, totalRows: dataRows.length });
   } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      await clearGoogleToken(req.user!.uid);
+      return res.status(401).json({ error: "Google account connection has expired. Please reconnect your Google account." });
+    }
     return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
