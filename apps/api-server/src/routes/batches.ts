@@ -520,9 +520,6 @@ router.post("/batches/:batchId/generate", async (req, res) => {
         await supabaseAdmin.from("tasks").delete().in("certificate_id", targetIds);
     }
 
-    const templateConfig = getTemplateConfig(batch.templateId);
-    const blankPdfBytes = getBlankPdfBytes(batch.templateId);
-
     const tasks = targetCerts.map((cert) => {
       const rowData = (cert.rowData as Record<string, string>) || {};
       const replacements: Record<string, string> = {};
@@ -559,8 +556,6 @@ router.post("/batches/:batchId/generate", async (req, res) => {
         payload: {
           userId,
           templateId: certTemplateId,
-          templateConfig: certTemplateId === batch.templateId ? templateConfig : null,
-          blankPdfBytes: certTemplateId === batch.templateId ? blankPdfBytes : null,
           recipientName: cert.recipientName,
           replacements,
           driveFolderId: batch.driveFolderId,

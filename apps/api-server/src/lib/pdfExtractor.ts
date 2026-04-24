@@ -6,14 +6,11 @@ import { getDriveClient, exportSlidesToPdf } from "./googleDrive.js";
 import axios from "axios";
 
 const FONTS_DIR = path.resolve("assets/fonts");
+const CACHE_DIR = path.resolve("assets/templates/.cache");
 
 const EMU_PER_PDF_POINT = 12700;
 
 // ── TTL Cache ─────────────────────────────────────────────────────────────────
-// A simple cache that evicts entries after `ttlMs` milliseconds of *inactivity*.
-// Access (get) refreshes the timer — so an active generation keeps its template
-// hot while an abandoned one gets cleaned up automatically.
-
 class TtlCache<T> {
   private cache = new Map<string, { value: T; lastAccessed: number }>();
   private readonly ttlMs: number;
@@ -22,7 +19,6 @@ class TtlCache<T> {
   constructor(ttlMs: number, cleanupIntervalMs = 60_000) {
     this.ttlMs = ttlMs;
     this.cleanupInterval = setInterval(() => this.evictExpired(), cleanupIntervalMs);
-    // Don't keep the Node.js process alive just for cleanup
     this.cleanupInterval.unref();
   }
 
@@ -33,7 +29,7 @@ class TtlCache<T> {
       this.cache.delete(key);
       return undefined;
     }
-    entry.lastAccessed = Date.now(); // refresh TTL on access
+    entry.lastAccessed = Date.now();
     return entry.value;
   }
 
@@ -41,16 +37,8 @@ class TtlCache<T> {
     this.cache.set(key, { value, lastAccessed: Date.now() });
   }
 
-  has(key: string): boolean {
-    return this.get(key) !== undefined;
-  }
-
   delete(key: string): void {
     this.cache.delete(key);
-  }
-
-  get size(): number {
-    return this.cache.size;
   }
 
   private evictExpired(): void {
@@ -58,17 +46,16 @@ class TtlCache<T> {
     for (const [key, entry] of this.cache.entries()) {
       if (now - entry.lastAccessed > this.ttlMs) {
         this.cache.delete(key);
-        console.log(`[CACHE] Evicted stale template: ${key} (idle > ${this.ttlMs / 60_000}min)`);
+        // Optional: Also delete from disk if we want to be super clean, 
+        // but keeping it on disk for the duration of the server process is usually fine.
       }
     }
   }
 }
 
-// TTL = TEMPLATE_CACHE_TTL_MINUTES env var, default 30 minutes
 const CACHE_TTL_MS = parseInt(process.env.TEMPLATE_CACHE_TTL_MINUTES || "30", 10) * 60_000;
 
-// ── In-memory stores ──────────────────────────────────────────────────────────
-// Keyed by templateId. Auto-evicted after CACHE_TTL_MS of inactivity.
+// In-memory stores (local to each thread)
 const templateConfigCache = new TtlCache<TemplateConfig>(CACHE_TTL_MS);
 const blankPdfCache = new TtlCache<Uint8Array>(CACHE_TTL_MS);
 
@@ -95,114 +82,84 @@ export interface TemplateConfig {
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
-/** Returns the in-memory template config, or null if not yet extracted. */
 export function getTemplateConfig(templateId: string): TemplateConfig | null {
   return templateConfigCache.get(templateId) ?? null;
 }
 
-/** Returns the in-memory blank PDF buffer, or null if not yet extracted. */
 export function getBlankPdfBytes(templateId: string): Uint8Array | null {
-  const data = blankPdfCache.get(templateId);
-  return data ?? null;
+  return blankPdfCache.get(templateId) ?? null;
 }
 
-/** 
- * Manually populates the cache for this process/thread.
- * Useful for worker threads receiving data from the main process.
- */
-export function populateCache(templateId: string, config: TemplateConfig, blankPdf: Uint8Array) {
-  templateConfigCache.set(templateId, config);
-  blankPdfCache.set(templateId, blankPdf);
-}
+// ── Extraction & Caching Logic ────────────────────────────────────────────────
 
-// ── Extraction deduplication ──────────────────────────────────────────────────
-// If two users trigger generation for the same templateId at the same time,
-// only ONE extraction runs. All concurrent callers await the same Promise.
 const extractionInFlight = new Map<string, Promise<TemplateConfig>>();
 
 /**
- * Ensures the template is in the in-memory cache, extracting it exactly once
- * even when called concurrently. Replaces the old pattern of:
- *   if (!getTemplateConfig(id)) await extractTemplate(uid, id);
+ * Ensures the template is in the LOCAL thread memory.
+ * Uses disk as a bridge to avoid multiple threads calling Google APIs.
  */
-export function ensureTemplateInCache(uid: string, templateId: string): Promise<TemplateConfig> {
-  // 1. Already cached — return immediately
+export async function ensureTemplateInCache(uid: string, templateId: string): Promise<TemplateConfig> {
+  // 1. Check local memory
   const cached = templateConfigCache.get(templateId);
-  if (cached) return Promise.resolve(cached);
+  if (cached) return cached;
 
-  // 2. Extraction already running — join it
+  // 2. Check for in-flight extraction (to avoid parallel extractions in the SAME thread)
   const inFlight = extractionInFlight.get(templateId);
-  if (inFlight) {
-    console.log(`[EXTRACT] Joining in-flight extraction for ${templateId}`);
-    return inFlight;
-  }
+  if (inFlight) return inFlight;
 
-  // 3. Start a new extraction and register it so concurrent callers can join
-  console.log(`[EXTRACT] Starting extraction for ${templateId}`);
-  const promise = extractTemplate(uid, templateId).finally(() => {
-    extractionInFlight.delete(templateId);
-  });
+  const promise = (async () => {
+    try {
+      // 3. Check Disk Bridge (to avoid parallel extractions in DIFFERENT threads)
+      if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+      const configPath = path.join(CACHE_DIR, `${templateId}.json`);
+      const pdfPath = path.join(CACHE_DIR, `${templateId}.pdf`);
+
+      if (fs.existsSync(configPath) && fs.existsSync(pdfPath)) {
+        console.log(`[CACHE] 📂 Loading template ${templateId} from disk bridge`);
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        const pdfBytes = fs.readFileSync(pdfPath);
+        templateConfigCache.set(templateId, config);
+        blankPdfCache.set(templateId, new Uint8Array(pdfBytes));
+        return config;
+      }
+
+      // 4. Extract from Google (First thread to get here wins)
+      return await extractTemplate(uid, templateId);
+    } finally {
+      extractionInFlight.delete(templateId);
+    }
+  })();
 
   extractionInFlight.set(templateId, promise);
   return promise;
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-/**
- * Ensures the font is on disk (shared across all templates).
- * Returns the filename if successful, null otherwise.
- */
 async function ensureFontOnDisk(fontFamily: string, isBold: boolean = false): Promise<string | null> {
   const fileName = `${fontFamily}${isBold ? "-Bold" : ""}.ttf`;
   const fontPath = path.join(FONTS_DIR, fileName);
-  if (fs.existsSync(fontPath)) {
-    console.log(`[FONT] ✅ Already on disk: ${fileName}`);
-    return fileName;
-  }
+  if (fs.existsSync(fontPath)) return fileName;
 
   console.log(`[FONT] Downloading: ${fontFamily} (Bold: ${isBold})`);
   try {
     let query = isBold ? `${fontFamily}:wght@700` : fontFamily;
     let searchUrl = `https://fonts.googleapis.com/css2?family=${query.replace(/\s+/g, "+")}`;
-    let cssRes;
-
-    try {
-      cssRes = await axios.get(searchUrl);
-    } catch (e: unknown) {
-      if (isBold && (e as { response?: { status?: number } }).response?.status === 400) {
-        console.warn(`[FONT] Bold variant for ${fontFamily} failed (400). Falling back to regular.`);
-        query = fontFamily;
-        searchUrl = `https://fonts.googleapis.com/css2?family=${query.replace(/\s+/g, "+")}`;
-        cssRes = await axios.get(searchUrl);
-      } else {
-        throw e;
-      }
-    }
+    let cssRes = await axios.get(searchUrl);
 
     const fontUrlMatch = cssRes.data.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
     if (fontUrlMatch && fontUrlMatch[1]) {
       if (!fs.existsSync(FONTS_DIR)) fs.mkdirSync(FONTS_DIR, { recursive: true });
       const fontRes = await axios.get(fontUrlMatch[1], { responseType: "arraybuffer" });
       fs.writeFileSync(fontPath, Buffer.from(fontRes.data));
-      console.log(`[FONT] ✅ Downloaded and saved: ${fileName}`);
       return fileName;
     }
-  } catch (err: unknown) {
-    console.warn(`[FONT] ❌ Failed to download ${fontFamily}: ${err instanceof Error ? err.message : String(err)}`);
+  } catch (err) {
+    console.warn(`[FONT] Failed to download ${fontFamily}`);
   }
   return null;
 }
 
-// ── Main extraction ────────────────────────────────────────────────────────────
-
-/**
- * Extracts a Google Slides template:
- * - Downloads missing fonts to disk (persistent, shared across templates)
- * - Stores TemplateConfig and blank PDF bytes in memory only
- */
 export async function extractTemplate(uid: string, templateId: string): Promise<TemplateConfig> {
-  console.log(`[EXTRACT] Starting extraction for template: ${templateId}`);
+  console.log(`[EXTRACT] ☁️ Fetching template ${templateId} from Google Drive`);
   const auth = await getAuthClientForUser(uid);
   const slides = google.slides({ version: "v1", auth });
   const drive = await getDriveClient(uid);
@@ -223,15 +180,10 @@ export async function extractTemplate(uid: string, templateId: string): Promise<
     let qrCode: { x: number; y: number; size: number } | undefined;
 
     for (const element of slide.pageElements || []) {
-      const transform = element.transform || {};
-      const size = element.size || {};
-      const scaleX = transform.scaleX || 1;
-      const scaleY = transform.scaleY || 1;
-
-      const x = (transform.translateX || 0) / EMU_PER_PDF_POINT;
-      const y = (transform.translateY || 0) / EMU_PER_PDF_POINT;
-      const width = ((size.width?.magnitude || 0) * scaleX) / EMU_PER_PDF_POINT;
-      const height = ((size.height?.magnitude || 0) * scaleY) / EMU_PER_PDF_POINT;
+      const x = (element.transform?.translateX || 0) / EMU_PER_PDF_POINT;
+      const y = (element.transform?.translateY || 0) / EMU_PER_PDF_POINT;
+      const width = ((element.size?.width?.magnitude || 0) * (element.transform?.scaleX || 1)) / EMU_PER_PDF_POINT;
+      const height = ((element.size?.height?.magnitude || 0) * (element.transform?.scaleY || 1)) / EMU_PER_PDF_POINT;
 
       if (element.title === "<<qr_code>>" || element.title === "{{qr_code}}") {
         qrCode = { x, y, size: Math.min(width, height) };
@@ -239,109 +191,76 @@ export async function extractTemplate(uid: string, templateId: string): Promise<
       }
 
       const textElements = element.shape?.text?.textElements || [];
-      const content = textElements.map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "").join("");
-      const placeholderMatch = content.match(/<<([^>]+)>>|{{([^}]+)}}/);
+      const content = textElements.map((te) => te.textRun?.content || "").join("");
+      const match = content.match(/<<([^>]+)>>|{{([^}]+)}}/);
 
-      if (placeholderMatch) {
-        const name = placeholderMatch[1] || placeholderMatch[2];
-
-        const run = textElements.find((te: slides_v1.Schema$TextElement) => te.textRun?.style);
-        const style = run?.textRun?.style || {};
-
+      if (match) {
+        const name = match[1] || match[2];
+        const style = textElements.find((te) => te.textRun?.style)?.textRun?.style || {};
+        
         let alignment = "START";
-        let explicitAlignmentFound = false;
         for (const te of textElements) {
           if (te.paragraphMarker?.style?.alignment) {
             alignment = te.paragraphMarker.style.alignment;
-            explicitAlignmentFound = true;
           }
         }
-
-        if (!explicitAlignmentFound && element.shape?.placeholder) {
-          const pType = element.shape.placeholder.type;
-          if (pType === "SUBTITLE" || pType === "CENTER_TITLE" || pType === "TITLE") {
-            alignment = "CENTER";
-          }
-        }
+        if (alignment === "START" && element.shape?.placeholder?.type?.includes("TITLE")) alignment = "CENTER";
 
         const fontSize = style.fontSize?.magnitude || 14;
         const fontFamily = style.fontFamily || "Arial";
-        const isBold = style.bold || false;
-        const isItalic = style.italic || false;
+        const isBold = !!style.bold;
+        const isItalic = !!style.italic;
         const rgb = style.foregroundColor?.opaqueColor?.rgbColor || { red: 0, green: 0, blue: 0 };
 
-        const fontKey = `${fontFamily}${isBold ? ":bold" : ""}${isItalic ? ":italic" : ""}`;
-        fontsToDownload.add(fontKey);
-
-        let fontFileName = fontFamily;
-        if (isBold && isItalic) fontFileName += "-BoldItalic";
-        else if (isBold) fontFileName += "-Bold";
-        else if (isItalic) fontFileName += "-Italic";
+        fontsToDownload.add(`${fontFamily}:${isBold ? "bold" : ""}`);
 
         placeholders.push({
           name, x, y, width, height, fontSize,
-          fontFamily: fontFileName,
+          fontFamily: `${fontFamily}${isBold ? "-Bold" : ""}${isItalic ? "-Italic" : ""}`,
           alignment,
-          color: { r: rgb.red || 0, g: rgb.green || 0, b: rgb.blue || 0 },
+          color: { r: rgb.red || 0, g: rgb.green || 0, b: rgb.blue || 0 }
         });
       }
     }
     slidesConfig[i] = { placeholders, qrCode };
   }
 
-  // ── Ensure all fonts are on disk (download if needed) ──────────────────────
   for (const fontKey of fontsToDownload) {
-    const [family, ...modifiers] = fontKey.split(":");
-    const isBold = modifiers.includes("bold");
-    await ensureFontOnDisk(family, isBold);
+    const [family, bold] = fontKey.split(":");
+    await ensureFontOnDisk(family, !!bold);
   }
 
-  // ── Build blank PDF in memory (no disk write) ──────────────────────────────
-  const copy = await drive.files.copy({
-    fileId: templateId,
-    requestBody: { name: `TEMP_BLANK_${templateId}` },
-  });
+  const copy = await drive.files.copy({ fileId: templateId, requestBody: { name: `TEMP_${templateId}` } });
   const copyId = copy.data.id!;
 
   try {
     const copyPres = await slides.presentations.get({ presentationId: copyId });
-    const deleteRequests: slides_v1.Schema$Request[] = [];
+    const requests: slides_v1.Schema$Request[] = [];
     for (const slide of copyPres.data.slides || []) {
       for (const el of slide.pageElements || []) {
-        const content =
-          (el.shape as slides_v1.Schema$Shape)?.text?.textElements
-            ?.map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "")
-            .join("") || "";
-        if (
-          content.match(/<<([^>]+)>>|{{([^}]+)}}/) ||
-          el.title === "<<qr_code>>" ||
-          el.title === "{{qr_code}}"
-        ) {
-          deleteRequests.push({ deleteObject: { objectId: el.objectId } });
+        const content = (el.shape as any)?.text?.textElements?.map((te: any) => te.textRun?.content || "").join("") || "";
+        if (content.match(/<<([^>]+)>>|{{([^}]+)}}/) || el.title?.includes("qr_code")) {
+          requests.push({ deleteObject: { objectId: el.objectId } });
         }
       }
     }
-    if (deleteRequests.length > 0) {
-      await slides.presentations.batchUpdate({
-        presentationId: copyId,
-        requestBody: { requests: deleteRequests },
-      });
+    if (requests.length > 0) {
+      await slides.presentations.batchUpdate({ presentationId: copyId, requestBody: { requests } });
     }
 
     const pdfBuffer = await exportSlidesToPdf(uid, copyId);
-    
-    // ── Convert to SharedArrayBuffer for zero-copy sharing across threads ─────
-    const sab = new SharedArrayBuffer(pdfBuffer.length);
-    const sharedView = new Uint8Array(sab);
-    sharedView.set(pdfBuffer);
-
     const config: TemplateConfig = { templateId, pageSize, slides: slidesConfig };
 
-    // ── Store in memory ────────────────────────────────────────────────────────
-    templateConfigCache.set(templateId, config);
-    blankPdfCache.set(templateId, sharedView);
-    console.log(`[EXTRACT] ✅ Template ${templateId} cached in shared memory.`);
+    // ── Save to Disk Bridge ───────────────────────────────────────────────────
+    if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(path.join(CACHE_DIR, `${templateId}.json`), JSON.stringify(config));
+    fs.writeFileSync(path.join(CACHE_DIR, `${templateId}.pdf`), pdfBuffer);
 
+    // ── Save to Memory ───────────────────────────────────────────────────────
+    templateConfigCache.set(templateId, config);
+    blankPdfCache.set(templateId, new Uint8Array(pdfBuffer));
+
+    console.log(`[EXTRACT] ✅ Template ${templateId} extracted and bridged to disk.`);
     return config;
   } finally {
     await drive.files.delete({ fileId: copyId }).catch(() => {});

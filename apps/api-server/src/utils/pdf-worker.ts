@@ -1,5 +1,5 @@
 import { generateCertificatePDF } from '../lib/pdfGenerator.js';
-import { ensureTemplateInCache, populateCache, getTemplateConfig } from '../lib/pdfExtractor.js';
+import { ensureTemplateInCache } from '../lib/pdfExtractor.js';
 import { supabaseAdmin, type Task, type Certificate } from '@workspace/supabase';
 import path from 'path';
 import fs from 'fs';
@@ -38,15 +38,7 @@ async function processTask(task: Task) {
     if (!userId || !templateId) throw new Error("Missing userId or templateId in task payload");
 
     // 0. Ensure template is in this worker thread's in-memory cache
-    if (!getTemplateConfig(templateId)) {
-        if (payload.templateConfig && payload.blankPdfBytes) {
-            console.log(`[THREAD-WORKER] Populating local cache from payload for ${templateId}`);
-            populateCache(templateId, payload.templateConfig as any, payload.blankPdfBytes as any);
-        } else {
-            console.log(`[THREAD-WORKER] Local cache miss for ${templateId}, ensuring via extraction...`);
-            await ensureTemplateInCache(userId, templateId);
-        }
-    }
+    await ensureTemplateInCache(userId, templateId);
 
     // 1. Generate the PDF bytes
     const pdfBytesUint8 = await generateCertificatePDF(
