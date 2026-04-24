@@ -122,8 +122,8 @@ export async function deleteR2Object(key: string): Promise<void> {
   try {
     await client.send(new DeleteObjectCommand({ Bucket: config.bucketName, Key: key }));
     console.log(`[R2] Deleted object: ${key}`);
-  } catch (err: any) {
-    console.warn(`[R2] Failed to delete object ${key}:`, err.message);
+  } catch (err: unknown) {
+    console.warn(`[R2] Failed to delete object ${key}:`, (err instanceof Error ? err.message : String(err)));
   }
 }
 

@@ -7,7 +7,10 @@ declare global {
             user?: {
                 uid: string;
                 email?: string;
+                phone_number?: string;
+                [key: string]: unknown;
             };
+            rawBody?: string | Buffer;
         }
     }
 }

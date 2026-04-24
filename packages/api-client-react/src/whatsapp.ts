@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, UseMutationOptions } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 
 // ─── Individual certificate send ─────────────────────────────────────────────
@@ -25,14 +25,14 @@ export const sendCertEmail = async (
 };
 
 export const useSendCertEmail = (options?: {
-  mutation?: Parameters<typeof useMutation>[0];
-}) => {
-  return useMutation<
+  mutation?: UseMutationOptions<
     SendCertEmailResponse,
     Error,
     { batchId: string; certId: string; data: SendCertEmailRequest }
-  >({
-    ...(options?.mutation as any),
+  >;
+}) => {
+  return useMutation({
+    ...options?.mutation,
     mutationFn: ({ batchId, certId, data }) => sendCertEmail(batchId, certId, data),
   });
 };
@@ -60,14 +60,14 @@ export const sendCertWhatsapp = async (
 };
 
 export const useSendCertWhatsapp = (options?: {
-  mutation?: Parameters<typeof useMutation>[0];
-}) => {
-  return useMutation<
+  mutation?: UseMutationOptions<
     SendCertWhatsappResponse,
     Error,
     { batchId: string; certId: string; data: SendCertWhatsappRequest }
-  >({
-    ...(options?.mutation as any),
+  >;
+}) => {
+  return useMutation({
+    ...options?.mutation,
     mutationFn: ({ batchId, certId, data }) => sendCertWhatsapp(batchId, certId, data),
   });
 };
@@ -99,14 +99,14 @@ export const sendBatchWhatsapp = async (
 };
 
 export const useSendBatchWhatsapp = (options?: {
-  mutation?: Parameters<typeof useMutation>[0];
-}) => {
-  return useMutation<
+  mutation?: UseMutationOptions<
     SendBatchWhatsappResponse,
     Error,
     { batchId: string; data: SendBatchWhatsappRequest }
-  >({
-    ...(options?.mutation as any),
+  >;
+}) => {
+  return useMutation({
+    ...options?.mutation,
     mutationFn: ({ batchId, data }) => sendBatchWhatsapp(batchId, data),
   });
 };

@@ -16,8 +16,8 @@ router.get("/slides/:templateId/slides-info", async (req, res) => {
   try {
     const slidesInfo = await getSlidesInfo(req.user!.uid, req.params.templateId);
     return res.json({ slides: slidesInfo });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -25,8 +25,8 @@ router.get("/slides/templates", async (req, res) => {
   try {
     const templates = await listSlideTemplates(req.user!.uid);
     return res.json({ templates });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -45,8 +45,8 @@ router.post(
       }
       const result = await uploadPptxAsPresentation(req.user!.uid, name, req.body);
       return res.status(201).json(result);
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
     }
   }
 );
@@ -63,8 +63,8 @@ router.post("/slides/templates", async (req, res) => {
     if (!name) return res.status(400).json({ error: "name is required" });
     const result = await createSlidePresentation(req.user!.uid, name);
     return res.status(201).json(result);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -72,8 +72,8 @@ router.get("/slides/:templateId/placeholders", async (req, res) => {
   try {
     const placeholders = await getSlidePlaceholders(req.user!.uid, req.params.templateId);
     return res.json({ placeholders });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -81,8 +81,8 @@ router.post("/slides/:templateId/qr-placeholder", async (req, res) => {
   try {
     await addQrCodePlaceholder(req.user!.uid, req.params.templateId);
     return res.status(200).json({ ok: true });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -111,9 +111,9 @@ router.get("/slides/thumbnail/:fileId", async (req, res) => {
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=3600"); // Cache for 1 hour
     return res.send(Buffer.from(buffer));
-  } catch (err: any) {
-    console.error(`[THUMBNAIL] Error proxying ${req.params.fileId}:`, err.message);
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    console.error(`[THUMBNAIL] Error proxying ${req.params.fileId}:`, (err instanceof Error ? err.message : String(err)));
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

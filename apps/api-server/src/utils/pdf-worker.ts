@@ -1,5 +1,5 @@
 import { generateCertificatePDF } from '../lib/pdfGenerator.js';
-import { supabaseAdmin } from '@workspace/supabase';
+import { supabaseAdmin, type Task, type Certificate } from '@workspace/supabase';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -9,17 +9,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOCAL_OUTPUT_DIR = path.join(__dirname, '..', '..', 'local_output');
 
-async function processTask(task: any) {
+async function processTask(task: Task) {
   try {
     const payload = task.payload || {};
-    const batchId = task.batchId || task.batch_id || payload.batchId || payload.batch_id;
-    const certificateId = task.certificateId || task.certificate_id || payload.certificateId || payload.certificate_id;
-    const recipientName = payload.recipientName || payload.recipient_name || 'Unknown';
-    const recipientEmail = payload.recipientEmail || payload.recipient_email || '';
-    const replacements = payload.replacements || {};
-    const qrCodeUrl = payload.qrCodeUrl || payload.qr_code_url;
-    const slideIndex = payload.slideIndex !== undefined ? payload.slideIndex : payload.slide_index;
-    const requestStartTime = payload.requestStartTime || payload.request_start_time;
+    const batchId = task.batchId || String(payload.batchId || payload.batch_id || "");
+    const certificateId = task.certificateId || String(payload.certificateId || payload.certificate_id || "");
+    const recipientName = String(payload.recipientName || payload.recipient_name || 'Unknown');
+    const recipientEmail = String(payload.recipientEmail || payload.recipient_email || '');
+    const replacements = (payload.replacements || {}) as Record<string, string>;
+    const qrCodeUrl = payload.qrCodeUrl || payload.qr_code_url ? String(payload.qrCodeUrl || payload.qr_code_url) : undefined;
+    const slideIndex = payload.slideIndex !== undefined ? Number(payload.slideIndex) : payload.slide_index !== undefined ? Number(payload.slide_index) : 0;
+    const requestStartTime = payload.requestStartTime ? Number(payload.requestStartTime) : payload.request_start_time ? Number(payload.request_start_time) : 0;
 
     const start = Date.now();
 
@@ -50,13 +50,13 @@ async function processTask(task: any) {
         try {
             const uploadStart = Date.now();
             const phone = payload.recipientPhone || payload.recipient_phone;
-            const folderName = phone ? phone : batchId;
+            const folderName = phone ? String(phone) : batchId;
             const r2Key = await uploadPdfToR2(folderName, fileName, pdfBytes);
             r2Url = getR2PublicUrl(r2Key);
             const uploadDuration = Date.now() - uploadStart;
             console.log(`[R2] ☁️ Uploaded/Overwrote: ${fileName} (${uploadDuration}ms)`);
-        } catch (r2Err: any) {
-            console.error(`[R2] ❌ Upload failed for ${fileName}:`, r2Err.message);
+        } catch (r2Err: unknown) {
+            console.error(`[R2] ❌ Upload failed for ${fileName}:`, r2Err instanceof Error ? r2Err.message : r2Err);
         }
     }
 
@@ -66,7 +66,7 @@ async function processTask(task: any) {
     
     // 3. Update DB
     try {
-      const updateData: any = {
+      const updateData: Partial<Certificate & Record<string, unknown>> = {
         status: 'generated',
         error_message: null
       };
@@ -133,28 +133,29 @@ async function processTask(task: any) {
           await supabaseAdmin.from('batches').update({ status: finalStatus }).eq('id', batchId);
       }
 
-    } catch (dbError: any) {
-      console.error(`[WORKER-DB] ⚠️ DB Update failed for ${recipientName}: ${dbError.message}`);
+    } catch (dbError: unknown) {
+      console.error(`[WORKER-DB] ⚠️ DB Update failed for ${recipientName}:`, dbError instanceof Error ? dbError.message : dbError);
     }
 
     return { success: true, taskId: task.id };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : String(error);
     console.error(`[THREAD-WORKER] Failed task ${task.id}:`, error);
     try {
         const payload = task.payload || {};
-        const batchId = task.batchId || task.batch_id || payload.batchId || payload.batch_id;
-        const certificateId = task.certificateId || task.certificate_id || payload.certificateId || payload.certificate_id;
+        const batchId = task.batchId || String(payload.batchId || payload.batch_id || "");
+        const certificateId = task.certificateId || String(payload.certificateId || payload.certificate_id || "");
 
         if (certificateId) {
             await supabaseAdmin.from('certificates').update({
                 status: 'failed',
-                error_message: error.message
+                error_message: errorMessage
             }).eq('id', certificateId);
         }
 
         await supabaseAdmin.from('tasks').update({
             status: 'failed',
-            error_message: error.message,
+            error_message: errorMessage,
             updated_at: new Date().toISOString()
         }).eq('id', task.id);
 
@@ -183,10 +184,10 @@ async function processTask(task: any) {
     } catch (e) {
         console.error(`[THREAD-WORKER] Critical DB error while marking task failure:`, e);
     }
-    return { success: false, taskId: task.id, error: error.message };
+    return { success: false, taskId: task.id, error: errorMessage };
   }
 }
 
-export default async function (tasks: any[]) {
+export default async function (tasks: Task[]) {
   return Promise.all(tasks.map(task => processTask(task)));
 }

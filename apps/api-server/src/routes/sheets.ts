@@ -13,8 +13,8 @@ router.post("/sheets", async (req, res) => {
     }
     const result = await createSpreadsheetWithHeaders(req.user!.uid, name, headers);
     return res.status(201).json(result);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -22,8 +22,8 @@ router.get("/sheets", async (req, res) => {
   try {
     const files = await listSheetFiles(req.user!.uid);
     return res.json({ sheets: files });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -63,8 +63,8 @@ router.get("/sheets/:sheetId/data", async (req, res) => {
     });
 
     return res.json({ headers, rows: dataRows, totalRows: dataRows.length });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

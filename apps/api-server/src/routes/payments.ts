@@ -18,7 +18,7 @@ router.post("/payments/create-order", async (req, res) => {
   try {
     const result = CreateOrderBody.parse(req.body);
     const uid = req.user!.uid;
-    const phone = (req.user as any)?.phone_number || "9999999999";
+    const phone = req.user?.phone_number || "9999999999";
     const email = req.user?.email || "sandbox@example.com";
 
     const request = {
@@ -34,7 +34,7 @@ router.post("/payments/create-order", async (req, res) => {
       },
     };
 
-    const response = await (cashfree as any).PGCreateOrder(request);
+    const response = await (cashfree as unknown as { PGCreateOrder: (req: unknown) => Promise<{ data?: { payment_session_id?: string; order_id?: string } }> }).PGCreateOrder(request);
     
     if (response.data && response.data.payment_session_id) {
       return res.json({
@@ -45,11 +45,11 @@ router.post("/payments/create-order", async (req, res) => {
       console.error("Cashfree API returned unexpected response", response.data);
       return res.status(500).json({ error: "Invalid response from payment gateway" });
     }
-  } catch (err: any) {
-    if (err.name === "ZodError") {
-      return res.status(400).json({ error: "Invalid request payload", details: err.errors });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "ZodError") {
+      return res.status(400).json({ error: "Invalid request payload", details: (err as { errors?: unknown }).errors });
     }
-    console.error("Cashfree Order Error:", err.response?.data || err.message);
+    console.error("Cashfree Order Error:", (err as { response?: { data?: unknown } })?.response?.data || (err instanceof Error ? err.message : String(err)));
     return res.status(500).json({ error: "Payment gateway error" });
   }
 });

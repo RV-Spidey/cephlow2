@@ -98,7 +98,7 @@ router.post("/webhooks/whatsapp", async (req, res) => {
         }
       }
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[WhatsApp Webhook] Error processing payload:", err);
   }
 });
@@ -109,16 +109,16 @@ router.post("/webhooks/cashfree", async (req, res) => {
   try {
     const signature = req.headers["x-webhook-signature"] as string;
     const timestamp = req.headers["x-webhook-timestamp"] as string;
-    const rawBody = (req as any).rawBody as string;
+    const rawBody = req.rawBody as string;
 
     if (!signature || !timestamp || !rawBody) {
       return res.status(400).json({ error: "Missing webhook headers/body" });
     }
 
     try {
-      (cashfree as any).PGVerifyWebhookSignature(signature, rawBody, timestamp);
-    } catch (err: any) {
-      console.error("[Cashfree Webhook] Invalid signature:", err.message);
+      (cashfree as unknown as { PGVerifyWebhookSignature: (sig: string, body: string, ts: string) => void }).PGVerifyWebhookSignature(signature, rawBody, timestamp);
+    } catch (err: unknown) {
+      console.error("[Cashfree Webhook] Invalid signature:", err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err));
       return res.status(401).json({ error: "Invalid signature" });
     }
 
@@ -152,7 +152,7 @@ router.post("/webhooks/cashfree", async (req, res) => {
         return res.status(500).json({ error: "Failed to process payment" });
       }
 
-      if ((rpcResult as any)?.status === "already_processed") {
+      if ((rpcResult as { status?: string })?.status === "already_processed") {
         console.log(`[Cashfree Webhook] Order ${orderId} already processed.`);
       } else {
         console.log(`[Cashfree Webhook] Credited ₹${amount} to ${customerId} (Order: ${orderId})`);
@@ -160,7 +160,7 @@ router.post("/webhooks/cashfree", async (req, res) => {
     }
 
     return res.status(200).send("OK");
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Cashfree Webhook] Error processing:", err);
     return res.status(500).json({ error: "Webhook processing failed" });
   }

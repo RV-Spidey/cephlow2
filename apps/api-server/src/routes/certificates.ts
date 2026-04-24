@@ -44,8 +44,8 @@ router.get("/certificates", async (req, res) => {
     });
 
     return res.json({ certificates, total: certificates.length });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -109,9 +109,9 @@ router.get("/certificates/:certId/verify", async (req, res) => {
       issuedAt: foundCert.created_at,
       status: foundCert.status,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Verification error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

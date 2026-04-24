@@ -18,7 +18,7 @@ router.get("/verify/:batchId/:certId", async (req, res) => {
       .maybeSingle();
 
     if (error) {
-      console.error(`[VERIFY] DB Error:`, error.message);
+      console.error(`[VERIFY] DB Error:`, (error instanceof Error ? error.message : String(error)));
       return res.status(500).json({ error: "Internal server error during verification" });
     }
 
@@ -53,8 +53,8 @@ router.get("/verify/:batchId/:certId", async (req, res) => {
       pdfUrl: cert.pdf_url || null,
       slideUrl: cert.slide_url || null,
     });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -69,8 +69,8 @@ router.get("/verify/:batchId/:certId/qr", async (req, res) => {
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=86400");
     res.send(qrBuffer);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

@@ -1,4 +1,4 @@
-import { supabaseAdmin, toCamel } from '@workspace/supabase';
+import { supabaseAdmin, toCamel, type Task } from '@workspace/supabase';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -85,7 +85,7 @@ async function pollTasks() {
       return;
     }
 
-    const tasks = rawTasks || [];
+    const tasks = (rawTasks || []).map((t: unknown) => toCamel<Task>(t as Record<string, unknown>));
     if (tasks.length === 0) {
       if (activeThreadCount === 0) {
         // console.log('[WORKER] 💤 Queue empty. Waiting for new tasks...');
@@ -97,14 +97,12 @@ async function pollTasks() {
     console.log(`[WORKER] 🚀 Grabbed ${tasks.length} tasks. (Active Threads: ${activeThreadCount}/${THREAD_CONCURRENCY})`);
 
     // Chunk tasks into groups of ASYNC_CONCURRENCY
-    const chunks: any[][] = [];
+    const chunks: Task[][] = [];
     for (let i = 0; i < tasks.length; i += ASYNC_CONCURRENCY) {
       chunks.push(tasks.slice(i, i + ASYNC_CONCURRENCY));
     }
 
-    for (const rawChunk of chunks) {
-      const chunk = rawChunk.map((t) => toCamel(t));
-      
+    for (const chunk of chunks) {
       activeThreadCount++;
       // Offload batch to thread pool
       pool.run(chunk)

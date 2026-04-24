@@ -20,7 +20,7 @@ router.get("/wallet", async (req, res) => {
     }
 
     return res.json({ currentBalance: data.current_balance });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error fetching wallet balance:", err);
     return res.status(500).json({ error: "Failed to fetch wallet balance" });
   }
@@ -49,7 +49,7 @@ router.get("/wallet/history", async (req, res) => {
     }));
 
     return res.json({ ledgers });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error fetching ledger history:", err);
     return res.status(500).json({ error: "Failed to fetch ledger history" });
   }

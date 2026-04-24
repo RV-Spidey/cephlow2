@@ -126,8 +126,8 @@ router.get("/batches", async (req, res) => {
     if (error) throw error;
     const batches = (data || []).map(toCamel);
     return res.json({ batches });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -219,8 +219,8 @@ router.post("/batches", async (req, res) => {
     }
 
     return res.status(201).json(toCamel(batchRow));
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -247,15 +247,15 @@ router.get("/batches/:batchId", async (req, res) => {
       .eq("batch_id", batchId)
       .in("status", ["pending", "processing"]);
 
-    const result = toCamel(batch);
+    const result = toCamel<Batch & { certificates?: Certificate[] }>(batch);
     if (!taskErr && (taskCount || 0) > 0) {
       result.status = "generating";
     }
 
-    result.certificates = (batch.certificates || []).map(toCamel);
+    result.certificates = (batch.certificates || []).map((c: unknown) => toCamel<Certificate>(c as Record<string, unknown>));
     return res.json(result);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -277,8 +277,8 @@ router.post("/batches/:batchId/share-folder", async (req, res) => {
 
     await makeFilePublic(userId, batch.pdf_folder_id);
     return res.json({ success: true, shareLink: `https://drive.google.com/drive/folders/${batch.pdf_folder_id}` });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -407,9 +407,9 @@ router.post("/batches/:batchId/sync", async (req, res) => {
     }
 
     return res.json({ success: true, message: `Synced successfully. Added ${newCount} new certificates.`, newCount });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[SYNC] failed:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -429,7 +429,7 @@ router.post("/batches/:batchId/generate", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as Batch & Record<string, any>;
+    const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     // Phase 1: Ensure template config exists
@@ -580,13 +580,13 @@ router.post("/batches/:batchId/generate", async (req, res) => {
     }
 
     return res.json({ success: true, message: "Generation started" });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[GENERATE] Initial request failed:", err);
     try {
       await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
     } catch {}
-    const status = err.statusCode || 500;
-    return res.status(status).json({ error: err.message });
+    const status = (err as { statusCode?: number }).statusCode || 500;
+    return res.status(status).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -604,7 +604,7 @@ router.post("/batches/:batchId/send", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (error || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as Batch & Record<string, any>;
+    const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { emailSubject: reqSubject, emailBody: reqBody } = req.body;
@@ -653,9 +653,9 @@ router.post("/batches/:batchId/send", async (req, res) => {
             status: "sent", sent_at: new Date().toISOString(), error_message: null,
           }).eq("id", cert.id);
           sent++;
-        } catch (err: any) {
+        } catch (err: unknown) {
           await supabaseAdmin.from("certificates").update({
-            status: "failed", error_message: err.message,
+            status: "failed", error_message: (err instanceof Error ? err.message : String(err)),
           }).eq("id", cert.id);
           failed++;
         }
@@ -672,8 +672,8 @@ router.post("/batches/:batchId/send", async (req, res) => {
     }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} emails. ${failed} failed.`, processed: sent, failed });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -695,7 +695,7 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (error || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as Batch & Record<string, any>;
+    const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { var1Template, var2Template, var3Template } = req.body;
@@ -746,8 +746,8 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
             await supabaseAdmin.from("wa_messages").insert({ wamid, batch_id: batchId, cert_id: cert.id });
           }
           sent++;
-        } catch (err: any) {
-          await supabaseAdmin.from("certificates").update({ status: "failed", error_message: err.message }).eq("id", cert.id);
+        } catch (err: unknown) {
+          await supabaseAdmin.from("certificates").update({ status: "failed", error_message: (err instanceof Error ? err.message : String(err)) }).eq("id", cert.id);
           failed++;
         }
       }));
@@ -764,9 +764,9 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
     }).eq("id", batchId);
 
     return res.json({ success: failed === 0, message: `Sent ${sent} WhatsApp messages. ${failed} failed.`, processed: sent, failed });
-  } catch (err: any) {
+  } catch (err: unknown) {
     await supabaseAdmin.from("batches").update({ status: "draft" }).eq("id", batchId);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -780,12 +780,12 @@ router.post("/batches/:batchId/certificates/:certId/send", async (req, res) => {
   try {
     const { data: batchRow, error: batchErr } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as Batch & Record<string, any>;
+    const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { data: certRow, error: certErr } = await supabaseAdmin.from("certificates").select("*").eq("id", certId).single();
     if (certErr || !certRow) return res.status(404).json({ error: "Certificate not found" });
-    const cert = toCamel(certRow) as Certificate & Record<string, any>;
+    const cert = toCamel<Certificate>(certRow);
 
     if (!cert.recipientEmail) return res.status(400).json({ error: "Certificate has no email address" });
     if (!cert.slideFileId) return res.status(400).json({ error: "Certificate has not been generated yet" });
@@ -818,9 +818,9 @@ router.post("/batches/:batchId/certificates/:certId/send", async (req, res) => {
     await supabaseAdmin.from("batches").update({ sent_count: sentCount }).eq("id", batchId);
 
     return res.json({ success: true, message: `Certificate sent to ${cert.recipientEmail}` });
-  } catch (err: any) {
-    await supabaseAdmin.from("certificates").update({ status: "failed", error_message: err.message }).eq("id", certId);
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    await supabaseAdmin.from("certificates").update({ status: "failed", error_message: (err instanceof Error ? err.message : String(err)) }).eq("id", certId);
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -838,12 +838,12 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", async (req, 
   try {
     const { data: batchRow, error: batchErr } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as Batch & Record<string, any>;
+    const batch = toCamel<Batch>(batchRow);
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { data: certRow, error: certErr } = await supabaseAdmin.from("certificates").select("*").eq("id", certId).single();
     if (certErr || !certRow) return res.status(404).json({ error: "Certificate not found" });
-    const cert = toCamel(certRow) as Certificate & Record<string, any>;
+    const cert = toCamel<Certificate>(certRow);
 
     if (!cert.r2PdfUrl) return res.status(400).json({ error: "No R2 PDF URL for this certificate" });
 
@@ -886,9 +886,9 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", async (req, 
     }).eq("id", batchId);
 
     return res.json({ success: true, message: `WhatsApp sent to ${phone}` });
-  } catch (err: any) {
-    await supabaseAdmin.from("certificates").update({ status: "failed", error_message: err.message }).eq("id", certId);
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    await supabaseAdmin.from("certificates").update({ status: "failed", error_message: (err instanceof Error ? err.message : String(err)) }).eq("id", certId);
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -926,8 +926,8 @@ router.patch("/batches/:batchId", async (req, res) => {
 
     await supabaseAdmin.from("batches").update(finalUpdate).eq("id", batchId);
     return res.json({ success: true, updatedFields: Object.keys(finalUpdate) });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -957,7 +957,7 @@ router.delete("/batches/:batchId", async (req, res) => {
       }
       if (r2Keys.length > 0) {
         try { await deleteR2Objects(r2Keys); }
-        catch (r2Err) { console.error("[R2] Failed to delete objects:", r2Err); }
+        catch (err) { console.error("[BATCH] Failed to upload template:", err instanceof Error ? err.message : String(err)); }
       }
     }
 
@@ -996,8 +996,8 @@ router.delete("/batches/:batchId", async (req, res) => {
     await supabaseAdmin.from("batches").delete().eq("id", batchId);
 
     return res.json({ success: true });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

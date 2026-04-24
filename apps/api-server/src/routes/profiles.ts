@@ -36,8 +36,8 @@ router.get("/p/:username", async (req, res) => {
     }));
 
     return res.json({ slug: profile.slug, name: profile.name, certificates });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -80,8 +80,8 @@ router.patch("/p/:username", requireAuth, async (req, res) => {
       .eq("slug", username);
 
     return res.json({ success: true, name: name.trim() });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    return res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 

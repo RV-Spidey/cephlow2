@@ -9,8 +9,8 @@ router.get("/auth/google/status", requireAuth, async (req, res) => {
   try {
     const connected = await hasGoogleToken(req.user!.uid);
     res.json({ connected });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -19,8 +19,8 @@ router.get("/auth/google/url", requireAuth, async (req, res) => {
   try {
     const url = await generateAuthUrl(req.user!.uid);
     res.json({ url });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err instanceof Error ? err.message : String(err)) });
   }
 });
 
@@ -40,8 +40,8 @@ router.get("/auth/google/callback", async (req, res) => {
   try {
     await handleCallback(String(code), String(state));
     res.redirect(`${frontendUrl}?google_auth=success`);
-  } catch (err: any) {
-    res.redirect(`${frontendUrl}?google_auth=error&reason=${encodeURIComponent(err.message)}`);
+  } catch (err: unknown) {
+    res.redirect(`${frontendUrl}?google_auth=error&reason=${encodeURIComponent((err instanceof Error ? err.message : String(err)))}`);
   }
 });
 

@@ -24,23 +24,23 @@ export async function verifySupabaseJwt(token: string): Promise<{ uid: string; e
 }
 
 // Convert snake_case DB row to camelCase for API responses
-export function toCamel(row: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+export function toCamel<T = unknown>(row: Record<string, unknown>): T {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
     const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
     result[camelKey] = value;
   }
-  return result;
+  return result as T;
 }
 
 // Convert camelCase object to snake_case for DB inserts
-export function toSnake(obj: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
+export function toSnake<T = unknown>(obj: Record<string, unknown>): T {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     const snakeKey = key.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
     result[snakeKey] = value;
   }
-  return result;
+  return result as T;
 }
 
 export type TaskType = 'generate' | 'send_email' | 'send_whatsapp';
@@ -51,7 +51,7 @@ export interface Task {
   batchId: string;
   certificateId?: string | null;
   type: TaskType;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   status: TaskStatus;
   attempts: number;
   errorMessage?: string | null;
@@ -76,7 +76,7 @@ export interface Batch {
   categoryColumn?: string | null;
   categoryTemplateMap?: Record<string, { templateId: string; templateName: string }> | null;
   categorySlideMap?: Record<string, number> | null;
-  categorySlideIndexes?: any | null;
+  categorySlideIndexes?: Record<string, number> | null;
   status: string;
   driveFolderId?: string | null;
   pdfFolderId?: string | null;

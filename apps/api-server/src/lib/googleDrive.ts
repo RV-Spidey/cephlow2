@@ -1,4 +1,4 @@
-import { google } from "googleapis";
+import { google, slides_v1 } from "googleapis";
 import { Readable } from "stream";
 import { getAuthClientForUser } from "./googleAuth.js";
 
@@ -59,9 +59,9 @@ export async function getSlidePlaceholders(
   for (const slide of res.data.slides || []) {
     for (const element of slide.pageElements || []) {
       const textElements =
-        (element.shape as any)?.text?.textElements || [];
+        (element.shape as slides_v1.Schema$Shape)?.text?.textElements || [];
       const text = textElements
-        .map((te: any) => te.textRun?.content || "")
+        .map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "")
         .join("");
       let match;
       while ((match = regex.exec(text)) !== null) {
@@ -373,7 +373,7 @@ export async function generateCertificate(
     });
     const allSlides = presData.data.slides || [];
     if (slideIndex >= 0 && slideIndex < allSlides.length && allSlides.length > 1) {
-      const deleteRequests: any[] = [];
+      const deleteRequests: slides_v1.Schema$Request[] = [];
       for (let i = allSlides.length - 1; i >= 0; i--) {
         if (i !== slideIndex) {
           deleteRequests.push({ deleteObject: { objectId: allSlides[i].objectId } });
@@ -393,7 +393,7 @@ export async function generateCertificate(
     fields: "slides(objectId,pageElements(objectId,title,size,transform,shape(text(textElements))))",
   });
 
-  const fontScaleRequests: any[] = [];
+  const fontScaleRequests: slides_v1.Schema$Request[] = [];
   const EMU_PER_PT = 12700;
   // Increased from 0.55 to 0.62 for more conservative estimation to prevent wrapping
   const CHAR_WIDTH_FACTOR = 0.62;
@@ -419,7 +419,7 @@ export async function generateCertificate(
   for (const slide of presentationData.data.slides || []) {
     for (const element of slide.pageElements || []) {
       const textElements = element.shape?.text?.textElements || [];
-      const content = textElements.map((te: any) => te.textRun?.content || "").join("");
+      const content = textElements.map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "").join("");
 
       for (const [placeholder, value] of Object.entries(replacements)) {
         if (content.includes(placeholder) && !processedObjectIds.has(element.objectId!)) {
@@ -427,7 +427,7 @@ export async function generateCertificate(
           // Subtract left+right insets from the available drawing width
           const shapeWidth = (shapeWidthEmu - DEFAULT_INSET_EMU * 2) / EMU_PER_PT;
           // Font size priority: explicit run override > fallback
-          const runFontEl = textElements.find((te: any) => te.textRun?.style?.fontSize?.magnitude);
+          const runFontEl = textElements.find((te: slides_v1.Schema$TextElement) => te.textRun?.style?.fontSize?.magnitude);
           const currentFontSize =
             runFontEl?.textRun?.style?.fontSize?.magnitude ||
             28; // Fallback confirmed from user's template
@@ -456,7 +456,7 @@ export async function generateCertificate(
     }
   }
 
-  const requests: any[] = [
+  const requests: slides_v1.Schema$Request[] = [
     ...Object.entries(replacements).map(([placeholder, value]) => ({
       replaceAllText: {
         containsText: { text: placeholder, matchCase: true },
@@ -483,8 +483,8 @@ export async function generateCertificate(
       const qrShapes: Array<{
         objectId: string;
         slideObjectId: string;
-        size: any;
-        transform: any;
+        size: slides_v1.Schema$Size | undefined;
+        transform: slides_v1.Schema$AffineTransform | undefined;
       }> = [];
 
       for (const slide of presentationData.data.slides || []) {
@@ -551,11 +551,11 @@ export async function deleteFile(uid: string, fileId: string) {
     const drive = await getDriveClient(uid);
     await drive.files.delete({ fileId });
     console.log(`[DRIVE] Deleted file: ${fileId}`);
-  } catch (err: any) {
-    if (err.code === 404) {
+  } catch (err: unknown) {
+    if ((err as any).code === 404) {
       console.warn(`[DRIVE] File ${fileId} not found, skipping deletion.`);
     } else {
-      console.error(`[DRIVE] Failed to delete file ${fileId}:`, err.message);
+      console.error(`[DRIVE] Failed to delete file ${fileId}:`, (err instanceof Error ? err.message : String(err)));
     }
   }
 }

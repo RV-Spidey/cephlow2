@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { google } from "googleapis";
+import { google, slides_v1 } from "googleapis";
 import { getAuthClientForUser } from "./googleAuth.js";
 import { getDriveClient, exportSlidesToPdf } from "./googleDrive.js";
 import axios from "axios";
@@ -61,8 +61,8 @@ async function downloadFont(fontFamily: string, isBold: boolean = false) {
     
     try {
       cssRes = await axios.get(searchUrl);
-    } catch (e: any) {
-      if (isBold && e.response?.status === 400) {
+    } catch (e: unknown) {
+      if (isBold && (e as { response?: { status?: number } }).response?.status === 400) {
         console.warn(`[FONT] Bold variant for ${fontFamily} failed (400). Falling back to regular.`);
         query = fontFamily;
         searchUrl = `https://fonts.googleapis.com/css2?family=${query.replace(/\s+/g, '+')}`;
@@ -79,8 +79,8 @@ async function downloadFont(fontFamily: string, isBold: boolean = false) {
       console.log(`[FONT] Successfully downloaded ${fileName}`);
       return fileName;
     }
-  } catch (err: any) {
-    console.warn(`[FONT] Failed to download ${fontFamily}: ${err.message}`);
+  } catch (err: unknown) {
+    console.warn(`[FONT] Failed to download ${fontFamily}: ${(err instanceof Error ? err.message : String(err))}`);
   }
   return null;
 }
@@ -123,14 +123,14 @@ export async function extractTemplate(uid: string, templateId: string): Promise<
       }
 
       const textElements = element.shape?.text?.textElements || [];
-      const content = textElements.map((te: any) => te.textRun?.content || "").join("");
+      const content = textElements.map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "").join("");
       const placeholderMatch = content.match(/<<([^>]+)>>|{{([^}]+)}}/);
 
       if (placeholderMatch) {
         const name = placeholderMatch[1] || placeholderMatch[2];
         
         // Find first text run with style
-        const run = textElements.find((te: any) => te.textRun?.style);
+        const run = textElements.find((te: slides_v1.Schema$TextElement) => te.textRun?.style);
         const style = run?.textRun?.style || {};
         
         // Find alignment by checking all paragraph markers
@@ -190,10 +190,10 @@ export async function extractTemplate(uid: string, templateId: string): Promise<
 
   try {
     const copyPres = await slides.presentations.get({ presentationId: copyId });
-    const deleteRequests: any[] = [];
+    const deleteRequests: slides_v1.Schema$Request[] = [];
     for (const slide of copyPres.data.slides || []) {
       for (const el of slide.pageElements || []) {
-        const content = (el.shape as any)?.text?.textElements?.map((te: any) => te.textRun?.content || "").join("") || "";
+        const content = (el.shape as slides_v1.Schema$Shape)?.text?.textElements?.map((te: slides_v1.Schema$TextElement) => te.textRun?.content || "").join("") || "";
         if (content.match(/<<([^>]+)>>|{{([^}]+)}}/) || el.title === "<<qr_code>>" || el.title === "{{qr_code}}") {
           deleteRequests.push({ deleteObject: { objectId: el.objectId } });
         }

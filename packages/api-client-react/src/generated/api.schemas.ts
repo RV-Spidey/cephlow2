@@ -111,8 +111,8 @@ export const CertificateStatus = {
 export type CertificateRowData = { [key: string]: string };
 
 export interface Certificate {
-  id: any;
-  batchId: any;
+  id: string | number;
+  batchId: string | number;
   recipientName: string;
   recipientEmail: string;
   status: CertificateStatus | string;
