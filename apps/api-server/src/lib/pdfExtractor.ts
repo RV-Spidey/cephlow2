@@ -70,7 +70,7 @@ const CACHE_TTL_MS = parseInt(process.env.TEMPLATE_CACHE_TTL_MINUTES || "30", 10
 // ── In-memory stores ──────────────────────────────────────────────────────────
 // Keyed by templateId. Auto-evicted after CACHE_TTL_MS of inactivity.
 const templateConfigCache = new TtlCache<TemplateConfig>(CACHE_TTL_MS);
-const blankPdfCache = new TtlCache<Buffer>(CACHE_TTL_MS);
+const blankPdfCache = new TtlCache<Uint8Array>(CACHE_TTL_MS);
 
 export interface PlaceholderConfig {
   name: string;
@@ -101,8 +101,18 @@ export function getTemplateConfig(templateId: string): TemplateConfig | null {
 }
 
 /** Returns the in-memory blank PDF buffer, or null if not yet extracted. */
-export function getBlankPdfBytes(templateId: string): Buffer | null {
-  return blankPdfCache.get(templateId) ?? null;
+export function getBlankPdfBytes(templateId: string): Uint8Array | null {
+  const data = blankPdfCache.get(templateId);
+  return data ?? null;
+}
+
+/** 
+ * Manually populates the cache for this process/thread.
+ * Useful for worker threads receiving data from the main process.
+ */
+export function populateCache(templateId: string, config: TemplateConfig, blankPdf: Uint8Array) {
+  templateConfigCache.set(templateId, config);
+  blankPdfCache.set(templateId, blankPdf);
 }
 
 // ── Extraction deduplication ──────────────────────────────────────────────────
@@ -319,13 +329,18 @@ export async function extractTemplate(uid: string, templateId: string): Promise<
     }
 
     const pdfBuffer = await exportSlidesToPdf(uid, copyId);
+    
+    // ── Convert to SharedArrayBuffer for zero-copy sharing across threads ─────
+    const sab = new SharedArrayBuffer(pdfBuffer.length);
+    const sharedView = new Uint8Array(sab);
+    sharedView.set(pdfBuffer);
 
     const config: TemplateConfig = { templateId, pageSize, slides: slidesConfig };
 
     // ── Store in memory ────────────────────────────────────────────────────────
     templateConfigCache.set(templateId, config);
-    blankPdfCache.set(templateId, pdfBuffer);
-    console.log(`[EXTRACT] ✅ Template ${templateId} cached in memory (config + blank PDF).`);
+    blankPdfCache.set(templateId, sharedView);
+    console.log(`[EXTRACT] ✅ Template ${templateId} cached in shared memory.`);
 
     return config;
   } finally {
