@@ -43,7 +43,7 @@ router.get("/verify/:batchId/:certId", async (req, res) => {
       r2PdfUrl = getR2PublicUrl(key);
     }
 
-    res.json({
+    return res.json({
       id: certId,
       recipientName: cert.recipient_name,
       status: cert.status,
@@ -54,7 +54,7 @@ router.get("/verify/:batchId/:certId", async (req, res) => {
       slideUrl: cert.slide_url || null,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 

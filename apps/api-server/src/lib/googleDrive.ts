@@ -1,6 +1,5 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
-import QRCode from "qrcode";
 import { getAuthClientForUser } from "./googleAuth.js";
 
 export async function getDriveClient(uid: string) {

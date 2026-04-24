@@ -37,9 +37,10 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
-  const initials = user?.displayName
+  const displayName = (user?.user_metadata?.full_name as string | undefined) ?? null;
+  const initials = displayName
     ?.split(" ")
-    .map((n) => n[0])
+    .map((n: string) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2) ?? user?.email?.[0]?.toUpperCase() ?? "?";
@@ -102,7 +103,7 @@ export function AppSidebar() {
             </div>
             <div className="flex flex-col flex-1 min-w-0">
               <span className="text-xs font-bold uppercase tracking-wide truncate">
-                {user.displayName ?? "User"}
+                {(user.user_metadata?.full_name as string | undefined) ?? "User"}
               </span>
               <span className="text-[10px] text-muted-foreground truncate">
                 {user.email}

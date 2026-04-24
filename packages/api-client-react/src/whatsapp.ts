@@ -40,6 +40,7 @@ export const useSendCertEmail = (options?: {
 export interface SendCertWhatsappRequest {
   var1Template: string;
   var2Template: string;
+  var3Template?: string;
 }
 
 export interface SendCertWhatsappResponse {
@@ -74,6 +75,7 @@ export const useSendCertWhatsapp = (options?: {
 export interface SendBatchWhatsappRequest {
   var1Template: string;
   var2Template: string;
+  var3Template?: string;
 }
 
 export interface SendBatchWhatsappResponse {

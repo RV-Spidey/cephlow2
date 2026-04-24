@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
-import { supabaseAdmin, toCamel, type Certificate } from "@workspace/supabase";
+import { supabaseAdmin, toCamel, type Certificate, type Batch } from "@workspace/supabase";
 import { getSheetsClient } from "../lib/googleSheets.js";
-import { generateCertificate, exportSlidesToPdf, createFolder, uploadPdf, makeFilePublic, deleteFile } from "../lib/googleDrive.js";
+import { exportSlidesToPdf, createFolder, makeFilePublic } from "../lib/googleDrive.js";
 import { extractTemplate, getTemplateConfig } from "../lib/pdfExtractor.js";
 import { sendEmail } from "../lib/gmail.js";
-import { uploadPdfToR2, isR2Configured, getR2PublicUrl, deleteR2Objects, deleteR2Object } from "../lib/cloudflareR2.js";
+import { isR2Configured, deleteR2Objects } from "../lib/cloudflareR2.js";
 import { isWhatsAppConfigured, sendWhatsAppDocument } from "../lib/whatsapp.js";
 
 const PHONE_COLUMN_NAMES = ["phonenumber", "phone", "mobile", "mobilenumber", "contact", "contactnumber", "contactno", "phoneno"];
@@ -34,6 +34,10 @@ function extractPhoneNumber(rowData: Record<string, string>): string {
 }
 
 const router: IRouter = Router();
+
+function buildPdfFilename(recipientName: string, batchName: string): string {
+  return `${recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batchName.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+}
 
 function emailToSlug(email: string): string {
   const prefix = email.split("@")[0] ?? "user";
@@ -425,7 +429,7 @@ router.post("/batches/:batchId/generate", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
+    const batch = toCamel(batchRow) as Batch & Record<string, any>;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     // Phase 1: Ensure template config exists
@@ -600,7 +604,7 @@ router.post("/batches/:batchId/send", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (error || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
+    const batch = toCamel(batchRow) as Batch & Record<string, any>;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { emailSubject: reqSubject, emailBody: reqBody } = req.body;
@@ -631,7 +635,7 @@ router.post("/batches/:batchId/send", async (req, res) => {
           if (cert.slideFileId) {
             pdfBuffer = await exportSlidesToPdf(userId, cert.slideFileId);
           }
-          const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+          const pdfFilename = buildPdfFilename(cert.recipientName, batch.name);
           const rowData = (cert.rowData as Record<string, string>) || {};
           let personalizedSubject = subject;
           let personalizedBody = body;
@@ -691,7 +695,7 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
       .eq("id", batchId)
       .single();
     if (error || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
+    const batch = toCamel(batchRow) as Batch & Record<string, any>;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { var1Template, var2Template, var3Template } = req.body;
@@ -727,7 +731,7 @@ router.post("/batches/:batchId/send-whatsapp", async (req, res) => {
           }
           var3 = var3.replace(/<<EmailPrefix>>/gi, emailPrefix);
 
-          const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+          const pdfFilename = buildPdfFilename(cert.recipientName, batch.name);
           const wamid = await sendWhatsAppDocument(phone, (cert as any).r2PdfUrl, pdfFilename, var1, var2, var3);
 
           await supabaseAdmin.from("certificates").update({
@@ -776,12 +780,12 @@ router.post("/batches/:batchId/certificates/:certId/send", async (req, res) => {
   try {
     const { data: batchRow, error: batchErr } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
+    const batch = toCamel(batchRow) as Batch & Record<string, any>;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { data: certRow, error: certErr } = await supabaseAdmin.from("certificates").select("*").eq("id", certId).single();
     if (certErr || !certRow) return res.status(404).json({ error: "Certificate not found" });
-    const cert = toCamel(certRow) as any;
+    const cert = toCamel(certRow) as Certificate & Record<string, any>;
 
     if (!cert.recipientEmail) return res.status(400).json({ error: "Certificate has no email address" });
     if (!cert.slideFileId) return res.status(400).json({ error: "Certificate has not been generated yet" });
@@ -791,7 +795,7 @@ router.post("/batches/:batchId/certificates/:certId/send", async (req, res) => {
     const body = reqBody || batch.emailBody || "Please find your certificate attached.";
 
     const pdfBuffer = await exportSlidesToPdf(userId, cert.slideFileId);
-    const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    const pdfFilename = buildPdfFilename(cert.recipientName, batch.name);
 
     const rowData = (cert.rowData as Record<string, string>) || {};
     let personalizedSubject = subject;
@@ -834,12 +838,12 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", async (req, 
   try {
     const { data: batchRow, error: batchErr } = await supabaseAdmin.from("batches").select("*").eq("id", batchId).single();
     if (batchErr || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
+    const batch = toCamel(batchRow) as Batch & Record<string, any>;
     if (batch.userId !== userId) return res.status(403).json({ error: "Access denied" });
 
     const { data: certRow, error: certErr } = await supabaseAdmin.from("certificates").select("*").eq("id", certId).single();
     if (certErr || !certRow) return res.status(404).json({ error: "Certificate not found" });
-    const cert = toCamel(certRow) as any;
+    const cert = toCamel(certRow) as Certificate & Record<string, any>;
 
     if (!cert.r2PdfUrl) return res.status(400).json({ error: "No R2 PDF URL for this certificate" });
 
@@ -859,7 +863,7 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", async (req, 
     }
     var3 = var3.replace(/<<EmailPrefix>>/gi, emailPrefix);
 
-    const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    const pdfFilename = buildPdfFilename(cert.recipientName, batch.name);
     const wamid = await sendWhatsAppDocument(phone, cert.r2PdfUrl, pdfFilename, var1, var2, var3);
     await supabaseAdmin.from("certificates").update({
       status: "sent",

@@ -16,7 +16,6 @@
     "@workspace/supabase": "workspace:*",
     "axios": "^1.15.2",
     "cashfree-pg": "^5.1.0",
-    "cookie-parser": "^1.4.7",
     "cors": "^2",
     "express": "^5",
     "googleapis": "^148.0.0",
@@ -25,7 +24,6 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
