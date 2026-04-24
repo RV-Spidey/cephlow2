@@ -64,14 +64,14 @@ export async function generateCertificatePDF(
   if (!templateId) throw new Error("Template ID not found for batch");
 
   const config = getTemplateConfig(templateId);
-  if (!config) throw new Error(`Template config not found in memory for ${templateId}. Re-trigger generation.`);
+  if (!config) throw new Error(`Template config not found in memory for ${templateId}. This should have been handled by ensureTemplateInCache.`);
 
   const slideConfig = config.slides[slideIndex];
   if (!slideConfig) throw new Error(`Config not found for slide index ${slideIndex} in template ${templateId}`);
 
   // 2. Load blank PDF (from in-memory cache)
   const templatePdfBytes = getBlankPdfBytes(templateId);
-  if (!templatePdfBytes) throw new Error(`Blank PDF not found in memory for template ${templateId}. Re-trigger generation.`);
+  if (!templatePdfBytes) throw new Error(`Blank PDF not found in memory for template ${templateId}. This should have been handled by ensureTemplateInCache.`);
 
   const templateDoc = await PDFDocument.load(templatePdfBytes);
 
