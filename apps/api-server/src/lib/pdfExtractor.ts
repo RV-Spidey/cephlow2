@@ -15,9 +15,11 @@ class TtlCache<T> {
   private cache = new Map<string, { value: T; lastAccessed: number }>();
   private readonly ttlMs: number;
   private readonly cleanupInterval: ReturnType<typeof setInterval>;
+  private readonly onEvict?: (key: string, value: T) => void;
 
-  constructor(ttlMs: number, cleanupIntervalMs = 60_000) {
+  constructor(ttlMs: number, onEvict?: (key: string, value: T) => void, cleanupIntervalMs = 60_000) {
     this.ttlMs = ttlMs;
+    this.onEvict = onEvict;
     this.cleanupInterval = setInterval(() => this.evictExpired(), cleanupIntervalMs);
     this.cleanupInterval.unref();
   }
@@ -46,8 +48,13 @@ class TtlCache<T> {
     for (const [key, entry] of this.cache.entries()) {
       if (now - entry.lastAccessed > this.ttlMs) {
         this.cache.delete(key);
-        // Optional: Also delete from disk if we want to be super clean, 
-        // but keeping it on disk for the duration of the server process is usually fine.
+        if (this.onEvict) {
+          try {
+            this.onEvict(key, entry.value);
+          } catch (err) {
+            console.error(`[CACHE] Error during eviction of ${key}:`, err);
+          }
+        }
       }
     }
   }
@@ -56,7 +63,19 @@ class TtlCache<T> {
 const CACHE_TTL_MS = parseInt(process.env.TEMPLATE_CACHE_TTL_MINUTES || "30", 10) * 60_000;
 
 // In-memory stores (local to each thread)
-const templateConfigCache = new TtlCache<TemplateConfig>(CACHE_TTL_MS);
+const templateConfigCache = new TtlCache<TemplateConfig>(CACHE_TTL_MS, (templateId) => {
+  const configPath = path.join(CACHE_DIR, `${templateId}.json`);
+  const pdfPath = path.join(CACHE_DIR, `${templateId}.pdf`);
+  
+  if (fs.existsSync(configPath)) {
+    fs.unlinkSync(configPath);
+    console.log(`[CACHE] 🗑️ Deleted config from disk: ${templateId}`);
+  }
+  if (fs.existsSync(pdfPath)) {
+    fs.unlinkSync(pdfPath);
+    console.log(`[CACHE] 🗑️ Deleted blank PDF from disk: ${templateId}`);
+  }
+});
 const blankPdfCache = new TtlCache<Uint8Array>(CACHE_TTL_MS);
 
 export interface PlaceholderConfig {
@@ -88,6 +107,23 @@ export function getTemplateConfig(templateId: string): TemplateConfig | null {
 
 export function getBlankPdfBytes(templateId: string): Uint8Array | null {
   return blankPdfCache.get(templateId) ?? null;
+}
+
+/** 
+ * Manually clears a template from memory and disk.
+ * Be careful: this will break any other jobs currently using this template.
+ */
+export function clearTemplateCache(templateId: string) {
+  templateConfigCache.delete(templateId);
+  blankPdfCache.delete(templateId);
+  
+  const configPath = path.join(CACHE_DIR, `${templateId}.json`);
+  const pdfPath = path.join(CACHE_DIR, `${templateId}.pdf`);
+  
+  if (fs.existsSync(configPath)) fs.unlinkSync(configPath);
+  if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
+  
+  console.log(`[CACHE] 🧹 Manually cleared template: ${templateId}`);
 }
 
 // ── Extraction & Caching Logic ────────────────────────────────────────────────

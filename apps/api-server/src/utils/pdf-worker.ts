@@ -1,5 +1,5 @@
 import { generateCertificatePDF } from '../lib/pdfGenerator.js';
-import { ensureTemplateInCache } from '../lib/pdfExtractor.js';
+import { ensureTemplateInCache, clearTemplateCache } from '../lib/pdfExtractor.js';
 import { supabaseAdmin, type Task, type Certificate } from '@workspace/supabase';
 import path from 'path';
 import fs from 'fs';
@@ -140,6 +140,7 @@ async function processTask(task: Task) {
           const finalStatus = allGenerated ? 'generated' : 'partial';
 
           await supabaseAdmin.from('batches').update({ status: finalStatus }).eq('id', batchId);
+          clearTemplateCache(templateId);
       }
 
     } catch (dbError: unknown) {
