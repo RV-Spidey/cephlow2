@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import workflowImg from "../../public/images/workflow.png";
 
+const APPROVAL_WA_NUMBER = import.meta.env.VITE_APPROVAL_WA_NUMBER || "916282572066";
+const APPROVAL_WA_HREF = `https://wa.me/${APPROVAL_WA_NUMBER}?text=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Cephlow%20for%20my%20organisation.`;
+
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -813,7 +816,7 @@ export default function Landing() {
                 ))}
               </ul>
               <a
-                href="https://wa.me/919188501611?text=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Cephlow%20for%20my%20organisation."
+                href={APPROVAL_WA_HREF}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block text-center bg-white text-black text-xs tracking-wider px-4 py-3 hover:bg-gray-100 transition-colors font-bold mt-8"
@@ -845,7 +848,7 @@ export default function Landing() {
             Cephlow is currently invite-only for organisations. Request access and we'll get you set up within 24 hours.
           </p>
           <a
-            href="https://wa.me/919188501611?text=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Cephlow%20for%20my%20organisation."
+            href={APPROVAL_WA_HREF}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block bg-white text-black text-xs tracking-wider px-8 py-4 hover:bg-gray-100 transition-colors font-bold"
