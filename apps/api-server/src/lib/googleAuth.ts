@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@workspace/supabase";
 import crypto from "crypto";
 
 const SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/presentations",
 ];
@@ -16,12 +16,13 @@ function createOAuth2Client() {
   );
 }
 
-export async function generateAuthUrl(uid: string): Promise<string> {
+export async function generateAuthUrl(uid: string, originUrl?: string): Promise<string> {
   const nonce = crypto.randomBytes(16).toString("hex");
   await supabaseAdmin.from("pending_google_auth").upsert({
     nonce,
     uid,
     expires_at: Date.now() + 10 * 60 * 1000,
+    ...(originUrl && { origin_url: originUrl }),
   });
 
   const client = createOAuth2Client();
@@ -33,10 +34,10 @@ export async function generateAuthUrl(uid: string): Promise<string> {
   });
 }
 
-export async function handleCallback(code: string, state: string): Promise<void> {
+export async function handleCallback(code: string, state: string): Promise<{ originUrl?: string }> {
   const { data: row } = await supabaseAdmin
     .from("pending_google_auth")
-    .select("uid, expires_at")
+    .select("uid, expires_at, origin_url")
     .eq("nonce", state)
     .maybeSingle();
 
@@ -60,6 +61,8 @@ export async function handleCallback(code: string, state: string): Promise<void>
     refresh_token: tokens.refresh_token,
     updated_at: new Date().toISOString(),
   });
+
+  return { originUrl: row.origin_url ?? undefined };
 }
 
 export async function hasGoogleToken(uid: string): Promise<boolean> {

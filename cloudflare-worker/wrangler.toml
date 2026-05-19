@@ -21,7 +21,7 @@ database_id   = "aa02f81f-9d11-4bef-b17f-6f246395dfaa"
 
 [vars]
 R2_PUBLIC_URL = "https://pub-3e00f49622064202a04c19fb33ee2976.r2.dev"
-API_URL       = "https://certificate-api-imks.onrender.com"
+API_URL       = "https://api.cephlow.online"
 
 # ── Talk-to-Developer support bridge (non-secret) ────────────────────
 TG_SUPERGROUP_ID = "-1003610434523"

@@ -17,7 +17,8 @@ router.get("/auth/google/status", requireAuth, async (req, res) => {
 // Protected: generate the Google OAuth consent URL
 router.get("/auth/google/url", requireAuth, async (req, res) => {
   try {
-    const url = await generateAuthUrl(req.user!.uid);
+    const origin = typeof req.query.origin === "string" ? req.query.origin : undefined;
+    const url = await generateAuthUrl(req.user!.uid, origin);
     res.json({ url });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -38,8 +39,9 @@ router.get("/auth/google/callback", async (req, res) => {
   }
 
   try {
-    await handleCallback(String(code), String(state));
-    res.redirect(`${frontendUrl}/settings?google_auth=success`);
+    const { originUrl } = await handleCallback(String(code), String(state));
+    const redirectBase = originUrl || frontendUrl;
+    res.redirect(`${redirectBase}/settings?google_auth=success`);
   } catch (err: any) {
     res.redirect(`${frontendUrl}/settings?google_auth=error&reason=${encodeURIComponent(err.message)}`);
   }

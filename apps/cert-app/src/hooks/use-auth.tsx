@@ -112,7 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token = await getAccessToken();
         if (!token) return;
         const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "";
-        const res = await fetch(`${apiUrl}/api/auth/google/url`, {
+        const origin = encodeURIComponent(window.location.origin);
+        const res = await fetch(`${apiUrl}/api/auth/google/url?origin=${origin}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
