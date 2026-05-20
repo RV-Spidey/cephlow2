@@ -111,6 +111,7 @@ export interface Batch {
   generatedCount: number;
   sentCount: number;
   createdAt: string;
+  bannerUrl?: string | null;
 }
 
 export type CertificateStatus =

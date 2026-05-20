@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileSpreadsheet, Presentation, ChevronRight, CheckCircle2, Loader2, Link2, Send, Layers, PenTool } from "lucide-react";
+import { FileSpreadsheet, Presentation, ChevronRight, CheckCircle2, Loader2, Link2, Send, Layers, PenTool, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase";
@@ -43,6 +43,8 @@ export default function NewBatchWizard() {
 
   // Wizard State
   const [name, setName] = useState("");
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState("");
 
   const [sheetId, setSheetId] = useState("");
   const [sheetName, setSheetName] = useState("");
@@ -148,58 +150,64 @@ export default function NewBatchWizard() {
   });
   const slidesInfo = slidesInfoRes?.slides ?? [];
 
-  const { mutate: createBatch, isPending: creating } = useCreateBatch({
-    mutation: {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getListBatchesQueryKey() });
-        toast({ title: "Batch created!" });
-        setLocation(`/batches/${data.id}`);
-      },
-      onError: (error: any) => {
-        const code = error?.data?.code ?? error?.code;
-        if (code === "GOOGLE_TOKEN_EXPIRED" || code === "GOOGLE_NOT_CONNECTED") {
-          recheckGoogleAuth();
-          toast({
-            title: "Google account not connected",
-            description: "Connect your Google account in Settings to continue.",
-            variant: "destructive",
-            action: <ToastAction altText="Go to Settings" onClick={() => setLocation("/settings")}>Go to Settings</ToastAction>,
-          });
-          return;
-        }
-        toast({ title: "Failed to create batch", description: error.message, variant: "destructive" });
-      }
-    }
-  });
+  const { mutateAsync: createBatchAsync, isPending: creating } = useCreateBatch();
 
   const handleNext = () => setStep(s => Math.min(STEPS.length - 1, s + 1));
   const handlePrev = () => setStep(s => Math.max(0, s - 1));
 
-  const submitBatch = () => {
-    // Build the categorySlideMap including the default mapping
+  const submitBatch = async () => {
     const finalSlideMap: Record<string, number> = { ...categorySlideMap };
     if (multiTemplateMode) {
-      // Use sentinel key for default (Firestore reserves __ prefixed names)
       finalSlideMap["_default"] = defaultSlideIndex;
     }
 
-    createBatch({
-      data: {
-        name,
-        sheetId,
-        sheetName,
-        tabName,
-        templateId,
-        templateName,
-        templateKind,
-        columnMap,
-        emailColumn,
-        nameColumn,
-        emailSubject,
-        emailBody,
-        ...(multiTemplateMode && categoryColumn ? { categoryColumn, categorySlideMap: finalSlideMap } : {}),
-      } as any
-    });
+    try {
+      const batch = await createBatchAsync({
+        data: {
+          name,
+          sheetId,
+          sheetName,
+          tabName,
+          templateId,
+          templateName,
+          templateKind,
+          columnMap,
+          emailColumn,
+          nameColumn,
+          emailSubject,
+          emailBody,
+          ...(multiTemplateMode && categoryColumn ? { categoryColumn, categorySlideMap: finalSlideMap } : {}),
+        } as any,
+      });
+
+      queryClient.invalidateQueries({ queryKey: getListBatchesQueryKey() });
+
+      if (bannerFile) {
+        try {
+          await customFetch(`/api/batches/${batch.id}/banner`, {
+            method: "POST",
+            headers: { "Content-Type": bannerFile.type },
+            body: bannerFile,
+          });
+        } catch { /* non-fatal — batch is already created */ }
+      }
+
+      toast({ title: "Batch created!" });
+      setLocation(`/batches/${batch.id}`);
+    } catch (error: any) {
+      const code = error?.data?.code ?? error?.code;
+      if (code === "GOOGLE_TOKEN_EXPIRED" || code === "GOOGLE_NOT_CONNECTED") {
+        recheckGoogleAuth();
+        toast({
+          title: "Google account not connected",
+          description: "Connect your Google account in Settings to continue.",
+          variant: "destructive",
+          action: <ToastAction altText="Go to Settings" onClick={() => setLocation("/settings")}>Go to Settings</ToastAction>,
+        });
+        return;
+      }
+      toast({ title: "Failed to create batch", description: error.message, variant: "destructive" });
+    }
   };
 
   const isNextDisabled = () => {
@@ -273,6 +281,43 @@ export default function NewBatchWizard() {
                     placeholder="e.g. Q3 Leadership Training"
                     className="h-12 text-lg px-4"
                   />
+                </div>
+                <div className="space-y-3">
+                  <Label>Event Banner <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {bannerPreviewUrl ? (
+                    <div className="relative">
+                      <img
+                        src={bannerPreviewUrl}
+                        alt="Banner preview"
+                        className="w-full rounded-lg object-cover border border-border"
+                        style={{ maxHeight: 180 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setBannerFile(null); setBannerPreviewUrl(""); }}
+                        className="absolute top-2 right-2 bg-background border border-border rounded-full p-1 hover:bg-secondary transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-lg py-8 cursor-pointer hover:border-foreground transition-colors">
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Click to upload a banner image</span>
+                      <span className="text-xs text-muted-foreground/60">Shown on student certificate cards</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setBannerFile(file);
+                          setBannerPreviewUrl(URL.createObjectURL(file));
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
             )}

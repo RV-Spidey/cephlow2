@@ -17,11 +17,29 @@ router.get("/p/:username", async (req, res) => {
 
     if (error || !profile) return res.status(404).json({ error: "Profile not found" });
 
-    const { data: certsData } = await supabaseAdmin
+    const { data: certsData, error: certsError } = await supabaseAdmin
       .from("student_profile_certs")
-      .select("*, batches!batch_id(banner_url)")
+      .select("cert_id, batch_id, batch_name, recipient_name, r2_pdf_url, pdf_url, slide_url, issued_at, status")
       .eq("profile_slug", username)
       .order("issued_at", { ascending: false });
+
+    if (certsError) {
+      console.error("[profiles] student_profile_certs query error:", certsError);
+      return res.status(500).json({ error: certsError.message });
+    }
+
+    // Fetch banner URLs for the batches referenced by these certs
+    const batchIds = [...new Set((certsData || []).map((r) => r.batch_id).filter(Boolean))];
+    const bannerByBatchId: Record<string, string | null> = {};
+    if (batchIds.length > 0) {
+      const { data: batchRows } = await supabaseAdmin
+        .from("batches")
+        .select("id, banner_url")
+        .in("id", batchIds);
+      for (const b of batchRows || []) {
+        bannerByBatchId[b.id] = b.banner_url ?? null;
+      }
+    }
 
     const certificates = (certsData || []).map((row) => ({
       certId: row.cert_id,
@@ -33,7 +51,7 @@ router.get("/p/:username", async (req, res) => {
       slideUrl: row.slide_url ?? null,
       issuedAt: row.issued_at,
       status: row.status,
-      bannerUrl: (row.batches as any)?.banner_url ?? null,
+      bannerUrl: bannerByBatchId[row.batch_id] ?? null,
       bannerOverlayOpacity: 0.70,
       bannerTextColor: "default",
     }));
