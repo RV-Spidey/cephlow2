@@ -11,9 +11,11 @@ import {
   setClickVolume,
   previewSound,
 } from "@/hooks/use-mechanical-click";
+import { type Theme, THEME_LABELS, useThemePreference } from "@/hooks/use-theme";
+import { updatePassword, updateUserProfile } from "@/lib/supabase";
 
 export default function Settings() {
-  const { hasGoogleAuth, connectGoogle, disconnectGoogle, recheckGoogleAuth } = useAuth();
+  const { user, hasGoogleAuth, connectGoogle, disconnectGoogle, recheckGoogleAuth } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -30,6 +32,8 @@ export default function Settings() {
       toast({ title: "Failed to connect Google account", description: reason, variant: "destructive" });
     }
   }, []);
+
+  // ── Click sound ──────────────────────────────────────────────────────────────
   const [soundEnabled, setSoundEnabled] = useState(getClickSoundEnabled);
   const [activeSound, setActiveSound] = useState<ClickSound>(getClickSound);
   const [volume, setVolume] = useState(getClickVolume);
@@ -46,6 +50,73 @@ export default function Settings() {
     previewSound(s);
   }
 
+  // ── Theme ────────────────────────────────────────────────────────────────────
+  const { theme, changeTheme } = useThemePreference();
+
+  // ── Account ──────────────────────────────────────────────────────────────────
+  const [displayName, setDisplayName] = useState(
+    () => (user?.user_metadata?.full_name as string | undefined) ?? ""
+  );
+  const [savingName, setSavingName] = useState(false);
+
+  async function handleSaveName() {
+    setSavingName(true);
+    try {
+      await updateUserProfile({ full_name: displayName.trim() });
+      toast({ title: "Display name updated." });
+    } catch (err: any) {
+      toast({ title: "Failed to update name", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  // ── Change password ───────────────────────────────────────────────────────────
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  async function handleChangePassword() {
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await updatePassword(newPassword);
+      toast({ title: "Password updated." });
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast({ title: "Failed to update password", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
+  // ── Notification email ────────────────────────────────────────────────────────
+  const [notificationEmail, setNotificationEmail] = useState(
+    () => (user?.user_metadata?.notification_email as string | undefined) ?? ""
+  );
+  const [savingNotifEmail, setSavingNotifEmail] = useState(false);
+
+  async function handleSaveNotifEmail() {
+    setSavingNotifEmail(true);
+    try {
+      await updateUserProfile({ notification_email: notificationEmail.trim() });
+      toast({ title: "Notification email saved." });
+    } catch (err: any) {
+      toast({ title: "Failed to save email", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingNotifEmail(false);
+    }
+  }
+
+  // ── Google account ────────────────────────────────────────────────────────────
   const handleDisconnect = async () => {
     setLoading(true);
     try {
@@ -75,6 +146,137 @@ export default function Settings() {
         <h1 className="text-sm font-bold uppercase tracking-widest">Settings</h1>
       </div>
 
+      {/* ── Appearance ─────────────────────────────────────────────────────────── */}
+      <section className="border-2 border-border mb-4">
+        <div className="px-5 py-3 border-b-2 border-border">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Appearance
+          </span>
+        </div>
+        <div className="px-5 py-5">
+          <p className="text-xs font-bold uppercase tracking-wide mb-1">Theme</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-3">
+            Choose your preferred color theme.
+          </p>
+          <div className="flex gap-2">
+            {(Object.keys(THEME_LABELS) as Theme[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => changeTheme(t)}
+                className={`flex-1 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 transition-colors ${
+                  theme === t
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border hover:border-foreground"
+                }`}
+              >
+                {THEME_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Account ────────────────────────────────────────────────────────────── */}
+      <section className="border-2 border-border mb-4">
+        <div className="px-5 py-3 border-b-2 border-border">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Account
+          </span>
+        </div>
+
+        {/* Email (read-only) + display name */}
+        <div className="px-5 py-5 border-b-2 border-border">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+            Email
+          </p>
+          <p className="text-xs font-bold mb-4">{user?.email}</p>
+
+          <p className="text-xs font-bold uppercase tracking-wide mb-1">Display Name</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-3">
+            Shown in the sidebar and on certificates.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your name"
+              className="flex-1 px-3 py-2 text-xs border-2 border-border bg-background focus:outline-none focus:border-foreground"
+            />
+            <button
+              onClick={handleSaveName}
+              disabled={savingName}
+              className="shrink-0 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {savingName ? "..." : "Save"}
+            </button>
+          </div>
+        </div>
+
+        {/* Change password */}
+        <div className="px-5 py-5">
+          <p className="text-xs font-bold uppercase tracking-wide mb-1">Change Password</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-3">
+            Set a new password for your account.
+          </p>
+          <div className="flex flex-col gap-2">
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password"
+              className="px-3 py-2 text-xs border-2 border-border bg-background focus:outline-none focus:border-foreground"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              className="px-3 py-2 text-xs border-2 border-border bg-background focus:outline-none focus:border-foreground"
+            />
+            <button
+              onClick={handleChangePassword}
+              disabled={savingPassword || !newPassword || !confirmPassword}
+              className="self-start px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {savingPassword ? "..." : "Update Password"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Notifications ───────────────────────────────────────────────────────── */}
+      <section className="border-2 border-border mb-4">
+        <div className="px-5 py-3 border-b-2 border-border">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            Notifications
+          </span>
+        </div>
+        <div className="px-5 py-5">
+          <p className="text-xs font-bold uppercase tracking-wide mb-1">Notification Email</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-3">
+            Receive batch completion alerts at this address. Leave blank to use your account email.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={notificationEmail}
+              onChange={(e) => setNotificationEmail(e.target.value)}
+              placeholder={user?.email ?? "your@email.com"}
+              className="flex-1 px-3 py-2 text-xs border-2 border-border bg-background focus:outline-none focus:border-foreground"
+            />
+            <button
+              onClick={handleSaveNotifEmail}
+              disabled={savingNotifEmail}
+              className="shrink-0 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              {savingNotifEmail ? "..." : "Save"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Google Account ───────────────────────────────────────────────────────── */}
       <section className="border-2 border-border mb-4">
         <div className="px-5 py-3 border-b-2 border-border">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -112,6 +314,7 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Click Sound ─────────────────────────────────────────────────────────── */}
       <section className="border-2 border-border">
         <div className="px-5 py-3 border-b-2 border-border">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">

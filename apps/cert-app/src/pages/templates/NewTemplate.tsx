@@ -7,9 +7,9 @@ import {
   useCreateSlideTemplate,
   useGetSlidePlaceholders,
   useCreateSheet,
-  useListSlideTemplates,
   customFetch,
 } from "@workspace/api-client-react";
+import { useGooglePicker } from "@/hooks/use-google-picker";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ export default function NewTemplate() {
   const [multiTemplate, setMultiTemplate] = useState(false);
   const [sourceMode, setSourceMode] = useState<"new" | "existing" | "upload" | "builtin">("new");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [selectedTemplateName, setSelectedTemplateName] = useState("");
   const [createdTemplate, setCreatedTemplate] = useState<CreatedFile | null>(null);
   const [createdSheet, setCreatedSheet] = useState<CreatedFile | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
@@ -69,7 +70,8 @@ export default function NewTemplate() {
     });
   }, []);
 
-  const { data: templatesRes, isLoading: templatesLoading } = useListSlideTemplates();
+  const { openPicker } = useGooglePicker();
+  const [templatePickerLoading, setTemplatePickerLoading] = useState(false);
 
   const extractSlideId = (input: string) => {
     const match = input.match(/\/presentation\/d\/([a-zA-Z0-9-_]+)/);
@@ -466,44 +468,27 @@ export default function NewTemplate() {
                 ) : (
                   <div className="space-y-4">
                     <Label>Select an existing Google Slide</Label>
-                    {templatesLoading ? (
-                      <div className="flex items-center gap-3 text-muted-foreground p-8"><Loader2 className="animate-spin" /> Loading presentations...</div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto p-1 pr-2">
-                        {templatesRes?.templates.length === 0 ? (
-                          <div className="col-span-full py-8 text-center text-muted-foreground bg-secondary/30 rounded-xl border border-dashed">
-                            No Google Slides found in your account.
-                          </div>
-                        ) : (
-                          templatesRes?.templates.map((tpl) => (
-                            <div
-                              key={tpl.id}
-                              onClick={() => {
-                                setSelectedTemplateId(tpl.id);
-                              }}
-                              className={`group p-3 rounded-xl border-2 cursor-pointer transition-all hover-elevate flex flex-col gap-3 ${
-                                selectedTemplateId === tpl.id
-                                  ? "border-primary bg-primary/5 ring-4 ring-primary/10"
-                                  : "border-border/50 bg-card hover:border-primary/30"
-                              }`}
-                            >
-                              {tpl.thumbnailUrl ? (
-                                <img
-                                  src={tpl.thumbnailUrl}
-                                  alt={tpl.name}
-                                  className="w-full aspect-[4/3] object-cover rounded-lg border border-border/50"
-                                />
-                              ) : (
-                                <div className="w-full aspect-[4/3] bg-secondary rounded-lg flex items-center justify-center">
-                                  <Presentation className="w-8 h-8 text-muted-foreground/50" />
-                                </div>
-                              )}
-                              <div className="font-semibold text-xs line-clamp-2 px-1">
-                                {tpl.name}
-                              </div>
-                            </div>
-                          ))
-                        )}
+                    <Button
+                      variant="outline"
+                      className="h-11 px-6 gap-2"
+                      disabled={templatePickerLoading}
+                      onClick={async () => {
+                        setTemplatePickerLoading(true);
+                        try {
+                          const picked = await openPicker("presentation");
+                          if (picked) { setSelectedTemplateId(picked.id); setSelectedTemplateName(picked.name); }
+                        } finally {
+                          setTemplatePickerLoading(false);
+                        }
+                      }}
+                    >
+                      {templatePickerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                      {selectedTemplateId ? "Change Presentation" : "Pick from Google Drive"}
+                    </Button>
+                    {selectedTemplateId && (
+                      <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5">
+                        <Presentation className="w-5 h-5 text-primary shrink-0" />
+                        <span className="text-sm font-medium truncate">{selectedTemplateName || selectedTemplateId}</span>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">

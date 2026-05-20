@@ -6,9 +6,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useApproval } from "@/hooks/use-approval";
 import { useLockedFeatureGuard } from "@/components/LockedFeature";
 import {
-  useListSheets,
   useGetSheetData,
-  useListSlideTemplates,
   useGetSlidePlaceholders,
   useCreateBatch,
   getListBatchesQueryKey,
@@ -16,6 +14,7 @@ import {
   useListBuiltinTemplates,
   useGetBuiltinTemplate,
 } from "@workspace/api-client-react";
+import { useGooglePicker } from "@/hooks/use-google-picker";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,8 +89,30 @@ export default function NewBatchWizard() {
     });
   }, []);
 
+  const { openPicker } = useGooglePicker();
+  const [pickerLoading, setPickerLoading] = useState<"sheet" | "presentation" | null>(null);
+
+  const handlePickSheet = async () => {
+    setPickerLoading("sheet");
+    try {
+      const picked = await openPicker("sheet");
+      if (picked) { setSheetId(picked.id); setSheetName(picked.name); }
+    } finally {
+      setPickerLoading(null);
+    }
+  };
+
+  const handlePickTemplate = async () => {
+    setPickerLoading("presentation");
+    try {
+      const picked = await openPicker("presentation");
+      if (picked) { setTemplateId(picked.id); setTemplateName(picked.name); setCategorySlideMap({}); }
+    } finally {
+      setPickerLoading(null);
+    }
+  };
+
   // API Queries
-  const { data: sheetsRes, isLoading: sheetsLoading } = useListSheets();
   const { data: sheetData, isLoading: sheetDataLoading } = useGetSheetData(sheetId, { tabName }, { query: { enabled: !!sheetId } as any });
 
   // Unique category values from sheet data (for multi-template mode)
@@ -100,7 +121,6 @@ export default function NewBatchWizard() {
     const values = (sheetData.rows as Record<string, string>[]).map(r => r[categoryColumn]).filter(Boolean);
     return [...new Set(values)] as string[];
   })();
-  const { data: templatesRes, isLoading: templatesLoading } = useListSlideTemplates();
   const { data: builtinTemplatesRes, isLoading: builtinTemplatesLoading } = useListBuiltinTemplates();
   const { data: slidesPlaceholdersRes, isLoading: slidesPlaceholdersLoading } = useGetSlidePlaceholders(
     templateKind === "slides" ? templateId : "",
@@ -199,10 +219,10 @@ export default function NewBatchWizard() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-2 sm:py-8 pb-3 sm:pb-8 flex flex-col h-[calc(100dvh-4rem)] sm:h-auto">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-1 sm:py-1 pb-6 flex flex-col h-[calc(100dvh-7rem)]">
       {/* Stepper Header */}
-      <div className="mb-3 sm:mb-10 shrink-0">
-        <h1 className="text-2xl sm:text-3xl font-display font-bold mb-2 sm:mb-6">Create New Batch</h1>
+      <div className="mb-2 sm:mb-4 shrink-0">
+        <h1 className="text-2xl sm:text-3xl font-display font-bold mb-1 sm:mb-2">Create New Batch</h1>
         <div className="flex items-center justify-between relative">
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-secondary rounded-full -z-10" />
           <div
@@ -211,7 +231,7 @@ export default function NewBatchWizard() {
           />
           {STEPS.map((label, idx) => (
             <div key={idx} className="flex flex-col items-center gap-1 sm:gap-2">
-              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-semibold transition-colors duration-300 ${step > idx ? "bg-primary text-primary-foreground" :
+              <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-sm flex items-center justify-center text-xs sm:text-sm font-semibold transition-colors duration-300 ${step > idx ? "bg-primary text-primary-foreground" :
                   step === idx ? "bg-primary ring-4 ring-primary/20 text-primary-foreground" :
                     "bg-secondary text-muted-foreground"
                 }`}>
@@ -275,28 +295,28 @@ export default function NewBatchWizard() {
                       Connect Google Account
                     </Button>
                   </div>
-                ) : sheetsLoading ? (
-                  <div className="flex items-center gap-3 text-muted-foreground p-8"><Loader2 className="animate-spin" /> Loading sheets...</div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-1">
-                    {sheetsRes?.sheets.map(sheet => (
-                      <div
-                        key={sheet.id}
-                        onClick={() => { setSheetId(sheet.id); setSheetName(sheet.name); }}
-                        className={`p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all hover-elevate ${sheetId === sheet.id ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "border-border/50 bg-card hover:border-primary/30"
-                          }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${sheetId === sheet.id ? "bg-primary text-primary-foreground" : "bg-green-100 text-green-700"}`}>
-                            <FileSpreadsheet className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <div className="font-semibold text-foreground line-clamp-1">{sheet.name}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">Spreadsheet</div>
-                          </div>
+                  <div className="space-y-4">
+                    <Button
+                      variant="outline"
+                      className="h-12 px-6 gap-2"
+                      disabled={pickerLoading === "sheet"}
+                      onClick={handlePickSheet}
+                    >
+                      {pickerLoading === "sheet" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                      {sheetId ? "Change Sheet" : "Pick from Google Drive"}
+                    </Button>
+                    {sheetId && (
+                      <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl border-2 border-primary bg-primary/5 ring-4 ring-primary/10 max-w-sm">
+                        <div className="p-2 rounded-lg bg-primary text-primary-foreground">
+                          <FileSpreadsheet className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-foreground line-clamp-1">{sheetName}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">Spreadsheet selected</div>
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
@@ -379,31 +399,31 @@ export default function NewBatchWizard() {
                       </div>
                     </div>
                   )
-                ) : templatesLoading ? (
-                  <div className="flex items-center gap-3 text-muted-foreground p-8"><Loader2 className="animate-spin" /> Loading templates...</div>
                 ) : (
                   <>
                     {/* Template picker — shared for both modes */}
-                    <div>
-                      <Label className="text-sm mb-2 block">{multiTemplateMode ? "Select the presentation containing all slide designs" : "Select a template"}</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-1">
-                        {templatesRes?.templates.map(tpl => (
-                          <div
-                            key={tpl.id}
-                            onClick={() => { setTemplateId(tpl.id); setTemplateName(tpl.name); setCategorySlideMap({}); }}
-                            className={`group p-4 rounded-xl border-2 cursor-pointer transition-all hover-elevate flex flex-col gap-4 ${templateId === tpl.id ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "border-border/50 bg-card hover:border-primary/30"}`}
-                          >
-                            {tpl.thumbnailUrl ? (
-                              <img src={tpl.thumbnailUrl} alt={tpl.name} className="w-full aspect-[4/3] object-cover rounded-lg border border-border/50" />
-                            ) : (
-                              <div className="w-full aspect-[4/3] bg-secondary rounded-lg flex items-center justify-center">
-                                <Presentation className="w-10 h-10 text-muted-foreground/50" />
-                              </div>
-                            )}
-                            <div className="font-semibold text-sm line-clamp-2">{tpl.name}</div>
+                    <div className="space-y-4">
+                      <Label className="text-sm block">{multiTemplateMode ? "Select the presentation containing all slide designs" : "Select a template"}</Label>
+                      <Button
+                        variant="outline"
+                        className="h-12 px-6 gap-2"
+                        disabled={pickerLoading === "presentation"}
+                        onClick={handlePickTemplate}
+                      >
+                        {pickerLoading === "presentation" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                        {templateId ? "Change Template" : "Pick from Google Drive"}
+                      </Button>
+                      {templateId && (
+                        <div className="flex items-center gap-3 p-3 sm:p-4 rounded-xl border-2 border-primary bg-primary/5 ring-4 ring-primary/10 max-w-sm">
+                          <div className="p-2 rounded-lg bg-primary text-primary-foreground">
+                            <Presentation className="w-5 h-5" />
                           </div>
-                        ))}
-                      </div>
+                          <div>
+                            <div className="font-semibold text-foreground line-clamp-1">{templateName}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">Presentation selected</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Multi-template: slide mapping UI */}

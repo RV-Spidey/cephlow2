@@ -23,9 +23,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  useListSheets,
   useGetSheetData,
-  useListSlideTemplates,
   useGetSlidePlaceholders,
   useListBuiltinTemplates,
   useCreateBatch,
@@ -33,6 +31,7 @@ import {
   type SheetFile,
   type SlideTemplate,
 } from "@workspace/api-client-react";
+import { useGooglePicker } from "@/hooks/use-google-picker";
 import type { BuiltinTemplateSummary } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -92,8 +91,8 @@ function SpreadsheetNode({ id, data }: NodeProps) {
   const d = data as SpreadsheetData;
   const { updateNodeData, deleteElements, setNodes, setEdges, getNode } = useReactFlow();
 
-  const { data: sheetsRes, isLoading: sheetsLoading } = useListSheets();
-  const sheets = sheetsRes?.sheets ?? [];
+  const { openPicker } = useGooglePicker();
+  const [sheetPickerLoading, setSheetPickerLoading] = useState(false);
 
   const { data: sheetDataRes } = useGetSheetData(
     (d.sheetId as string) || "",
@@ -208,25 +207,22 @@ function SpreadsheetNode({ id, data }: NodeProps) {
         {d.source === "googlesheet" && (
           <div className="space-y-1">
             <span className="text-[9px] uppercase tracking-widest text-muted-foreground">Sheet</span>
-            {sheetsLoading ? (
-              <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground py-1">
-                <Loader2 className="w-3 h-3 animate-spin" /> Loading sheets…
-              </div>
-            ) : (
-              <select
-                value={d.sheetId as string}
-                onChange={(e) => {
-                  const sheet = sheets.find((s: SheetFile) => s.id === e.target.value);
-                  updateNodeData(id, { sheetId: e.target.value, sheetName: sheet?.name ?? "", tabName: "", columns: [], rows: [], routingColumns: [] });
-                }}
-                className="nodrag w-full text-[9px] border border-border bg-background px-2 py-1 font-mono cursor-pointer"
-              >
-                <option value="">Select sheet…</option>
-                {sheets.map((s: SheetFile) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            )}
+            <button
+              className="nodrag w-full text-[9px] border border-border bg-background px-2 py-1 font-mono cursor-pointer hover:border-foreground transition-colors flex items-center gap-1 disabled:opacity-50"
+              disabled={sheetPickerLoading}
+              onClick={async () => {
+                setSheetPickerLoading(true);
+                try {
+                  const picked = await openPicker("sheet");
+                  if (picked) updateNodeData(id, { sheetId: picked.id, sheetName: picked.name, tabName: "", columns: [], rows: [], routingColumns: [] });
+                } finally {
+                  setSheetPickerLoading(false);
+                }
+              }}
+            >
+              {sheetPickerLoading && <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />}
+              <span className="truncate">{(d.sheetName as string) || "Pick from Drive…"}</span>
+            </button>
           </div>
         )}
 
@@ -415,8 +411,8 @@ function TemplateNode({ id, data }: NodeProps) {
   const d = data as TemplateData;
   const { updateNodeData, deleteElements, getEdges } = useReactFlow();
 
-  const { data: slidesRes } = useListSlideTemplates();
-  const slideTemplates = slidesRes?.templates ?? [];
+  const { openPicker: openTemplatePicker } = useGooglePicker();
+  const [templatePickerLoading, setTemplatePickerLoading] = useState(false);
 
   const { data: phRes } = useGetSlidePlaceholders(d.templateId as string);
 
@@ -482,19 +478,22 @@ function TemplateNode({ id, data }: NodeProps) {
         {d.kind === "slides" && (
           <div className="space-y-1">
             <span className="text-[9px] uppercase tracking-widest text-muted-foreground">Template</span>
-            <select
-              value={d.templateId as string}
-              onChange={(e) => {
-                const tpl = slideTemplates.find((t: SlideTemplate) => t.id === e.target.value);
-                updateNodeData(id, { templateId: e.target.value, templateName: tpl?.name ?? "", placeholders: [] });
+            <button
+              className="nodrag w-full text-[9px] border border-border bg-background px-2 py-1 font-mono cursor-pointer hover:border-foreground transition-colors flex items-center gap-1 disabled:opacity-50"
+              disabled={templatePickerLoading}
+              onClick={async () => {
+                setTemplatePickerLoading(true);
+                try {
+                  const picked = await openTemplatePicker("presentation");
+                  if (picked) updateNodeData(id, { templateId: picked.id, templateName: picked.name, placeholders: [] });
+                } finally {
+                  setTemplatePickerLoading(false);
+                }
               }}
-              className="nodrag w-full text-[9px] border border-border bg-background px-2 py-1 font-mono cursor-pointer"
             >
-              <option value="">Select template…</option>
-              {slideTemplates.map((t: SlideTemplate) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+              {templatePickerLoading && <Loader2 className="w-2.5 h-2.5 animate-spin shrink-0" />}
+              <span className="truncate">{(d.templateName as string) || "Pick from Drive…"}</span>
+            </button>
             {d.templateId && !phRes?.placeholders && (
               <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" /> Detecting placeholders…

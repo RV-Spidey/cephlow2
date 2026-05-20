@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useThemePreference } from "@/hooks/use-theme";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -87,27 +88,12 @@ const ADMIN_NAV_ITEMS = [
   { title: "Brand Kit", url: "/workspace/brand", icon: Palette },
 ];
 
-function useDarkMode() {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = localStorage.getItem("theme");
-    if (stored) return stored === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
-  return [dark, setDark] as const;
-}
-
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { role } = useWorkspace();
   const { isApproved } = useApproval();
-  const [dark, setDark] = useDarkMode();
+  const { isDark, changeTheme } = useThemePreference();
   const [lockedModal, setLockedModal] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
 
@@ -259,11 +245,11 @@ export function AppSidebar() {
                 </span>
               </div>
               <button
-                onClick={() => setDark(!dark)}
+                onClick={() => changeTheme(isDark ? 'light' : 'dark')}
                 className="p-1.5 text-muted-foreground hover:text-foreground border border-border hover:border-foreground transition-colors"
-                title={dark ? "Switch to light mode" : "Switch to dark mode"}
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
               >
-                {dark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
               </button>
               <button
                 onClick={() => setLogoutOpen(true)}

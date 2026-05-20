@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   Type,
   Image as ImageIcon,
@@ -52,6 +53,14 @@ export function EditorToolbar({
   toggleFullscreen,
   fullscreenContainer,
 }: Props) {
+  const { toast } = useToast();
+  const handleSave = () => {
+    if (!templateName.trim()) {
+      toast({ title: "Please name your template before saving", description: "Type a name in the 'Template name' field at the top." });
+      return;
+    }
+    onSave();
+  };
   const addText = () => {
     const id = newId("text");
     store.addElement({
@@ -263,7 +272,7 @@ export function EditorToolbar({
         {!isFullscreen && (
           <>
             <div className="h-6 w-px bg-border mx-1" />
-            <Button onClick={onSave} disabled={saving || !templateName.trim()} size="sm">
+            <Button onClick={handleSave} disabled={saving} size="sm">
               {saving ? <Loader2 className="w-4 h-4 sm:mr-1.5 animate-spin" /> : <Save className="w-4 h-4 sm:mr-1.5" />}
               <span className="hidden sm:inline">Save</span>
             </Button>

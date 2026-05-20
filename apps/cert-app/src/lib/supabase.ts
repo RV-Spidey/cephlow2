@@ -37,4 +37,9 @@ export async function updatePassword(newPassword: string) {
   if (error) throw error;
 }
 
+export async function updateUserProfile(data: { full_name?: string; notification_email?: string }) {
+  const { error } = await supabase.auth.updateUser({ data });
+  if (error) throw error;
+}
+
 export type User = Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"];
