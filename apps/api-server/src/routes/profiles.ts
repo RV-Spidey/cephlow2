@@ -30,14 +30,14 @@ router.get("/p/:username", async (req, res) => {
 
     // Fetch banner URLs for the batches referenced by these certs
     const batchIds = [...new Set((certsData || []).map((r) => r.batch_id).filter(Boolean))];
-    const bannerByBatchId: Record<string, string | null> = {};
+    const bannerByBatchId: Record<string, { banner_url: string | null; banner_overlay_opacity: number; banner_text_color: string }> = {};
     if (batchIds.length > 0) {
       const { data: batchRows } = await supabaseAdmin
         .from("batches")
-        .select("id, banner_url")
+        .select("id, banner_url, banner_overlay_opacity, banner_text_color")
         .in("id", batchIds);
       for (const b of batchRows || []) {
-        bannerByBatchId[b.id] = b.banner_url ?? null;
+        bannerByBatchId[b.id] = b;
       }
     }
 
@@ -51,9 +51,9 @@ router.get("/p/:username", async (req, res) => {
       slideUrl: row.slide_url ?? null,
       issuedAt: row.issued_at,
       status: row.status,
-      bannerUrl: bannerByBatchId[row.batch_id] ?? null,
-      bannerOverlayOpacity: 0.70,
-      bannerTextColor: "default",
+      bannerUrl: bannerByBatchId[row.batch_id]?.banner_url ?? null,
+      bannerOverlayOpacity: bannerByBatchId[row.batch_id]?.banner_overlay_opacity ?? 0.70,
+      bannerTextColor: bannerByBatchId[row.batch_id]?.banner_text_color ?? "default",
     }));
 
     return res.json({ slug: profile.slug, name: profile.name, certificates });
