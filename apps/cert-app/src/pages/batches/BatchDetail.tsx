@@ -16,6 +16,7 @@ import {
   useSendCertWhatsapp,
   useSyncBatch,
   useGetWalletBalance,
+  customFetch,
 } from "@workspace/api-client-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,8 +29,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Play, Send, MailCheck, Loader2, FileText, CheckCircle2, XCircle, Clock, Share2, ExternalLink, QrCode, Copy, Check, MessageCircle, CheckCheck, Truck, RefreshCcw, Grid, Layout, Mail, Layers, Presentation, FileSpreadsheet, AlertCircle, X } from "lucide-react";
+import { Play, Send, MailCheck, Loader2, FileText, CheckCircle2, XCircle, Clock, Share2, ExternalLink, QrCode, Copy, Check, MessageCircle, CheckCheck, Truck, RefreshCcw, Grid, Layout, Mail, Layers, Presentation, FileSpreadsheet, AlertCircle, X, Upload, Award, CalendarDays, ShieldCheck, Eye } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -96,6 +98,72 @@ export default function BatchDetail() {
   });
 
   const [selectedCertIds, setSelectedCertIds] = useState<string[]>([]);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const [bannerEditorOpen, setBannerEditorOpen] = useState(false);
+  const [bannerPreviewFile, setBannerPreviewFile] = useState<File | null>(null);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
+  const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState(0.70);
+  const [bannerTextColor, setBannerTextColor] = useState<"default" | "black" | "white">("default");
+
+  const handleBannerUpload = async (file: File) => {
+    setBannerUploading(true);
+    try {
+      await customFetch(`/api/batches/${batchId}/banner`, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      queryClient.invalidateQueries({ queryKey: getGetBatchQueryKey(batchId) });
+      toast({ title: "Banner updated" });
+    } catch (err: any) {
+      toast({ title: "Banner upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  const handleBannerEditorOpen = () => {
+    setBannerPreviewFile(null);
+    setBannerPreviewUrl((batch as any).bannerUrl ?? null);
+    setBannerOverlayOpacity((batch as any).bannerOverlayOpacity ?? 0.70);
+    setBannerTextColor((batch as any).bannerTextColor ?? "default");
+    setBannerEditorOpen(true);
+  };
+
+  const handleBannerEditorFileChange = (file: File) => {
+    setBannerPreviewFile(file);
+    const url = URL.createObjectURL(file);
+    setBannerPreviewUrl(url);
+  };
+
+  const handleBannerEditorConfirm = async () => {
+    setBannerUploading(true);
+    try {
+      if (bannerPreviewFile) {
+        await customFetch(`/api/batches/${batchId}/banner`, {
+          method: "POST",
+          headers: { "Content-Type": bannerPreviewFile.type },
+          body: bannerPreviewFile,
+        });
+      }
+      await customFetch(`/api/batches/${batchId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bannerOverlayOpacity, bannerTextColor }),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetBatchQueryKey(batchId) });
+      toast({ title: "Banner updated" });
+    } catch (err: any) {
+      toast({ title: "Banner update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBannerUploading(false);
+    }
+    setBannerEditorOpen(false);
+    if (bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(bannerPreviewUrl);
+    }
+  };
 
   // Certs still needing generation (used for resume path)
   const allCerts = (batch?.certificates || []) as any[];
@@ -658,6 +726,44 @@ export default function BatchDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Event Banner */}
+      <Card className="border-border/50 shadow-sm overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center justify-between">
+            Event Banner
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBannerEditorOpen}
+              disabled={bannerUploading}
+              className="h-7 text-xs"
+            >
+              {bannerUploading ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Eye className="w-3 h-3 mr-1.5" />}
+              {bannerUploading ? "Uploading…" : (batch as any).bannerUrl ? "Edit Banner" : "Add Banner"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {(batch as any).bannerUrl ? (
+            <img
+              src={(batch as any).bannerUrl}
+              alt="Event banner"
+              className="w-full rounded object-cover"
+              style={{ maxHeight: 160 }}
+            />
+          ) : (
+            <button
+              onClick={handleBannerEditorOpen}
+              className="w-full border-2 border-dashed border-border rounded flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground hover:border-foreground transition-colors"
+            >
+              <Upload className="w-5 h-5" />
+              <span className="text-xs">Click to add a banner image</span>
+              <span className="text-[10px] opacity-60">Shown on student certificate cards</span>
+            </button>
+          )}
+        </CardContent>
+      </Card>
 
       {/* In-app warning shown while generation is active */}
       {isGenerating && (
@@ -1234,6 +1340,150 @@ export default function BatchDetail() {
         </DialogContent>
       </Dialog>
 
+
+      {/* Banner Editor / Preview Dialog */}
+      <Dialog open={bannerEditorOpen} onOpenChange={(open) => {
+        if (!open && bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(bannerPreviewUrl);
+        setBannerEditorOpen(open);
+      }}>
+        <DialogContent className="sm:max-w-[780px]">
+          <DialogHeader>
+            <DialogTitle>Event Banner</DialogTitle>
+            <DialogDescription>
+              Upload a banner image and preview exactly how it will appear on each student's certificate card.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid md:grid-cols-2 gap-6 py-2">
+            {/* Left: upload + appearance controls */}
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Select image</p>
+                <label
+                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border rounded-lg py-8 cursor-pointer hover:border-foreground transition-colors text-muted-foreground"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type.startsWith("image/")) handleBannerEditorFileChange(file);
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleBannerEditorFileChange(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <Upload className="w-5 h-5" />
+                  <span className="text-xs">Click or drag &amp; drop an image</span>
+                  {bannerPreviewFile && (
+                    <span className="text-[11px] text-foreground font-medium truncate max-w-[200px]">{bannerPreviewFile.name}</span>
+                  )}
+                </label>
+              </div>
+
+              {/* Overlay opacity */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Overlay opacity</p>
+                  <span className="text-xs text-muted-foreground font-mono">{Math.round(bannerOverlayOpacity * 100)}%</span>
+                </div>
+                <Slider
+                  min={0} max={100} step={1}
+                  value={[Math.round(bannerOverlayOpacity * 100)]}
+                  onValueChange={([v]) => setBannerOverlayOpacity(v / 100)}
+                  className="w-full"
+                />
+                <p className="text-[10px] text-muted-foreground">0% = image fully visible · 100% = image hidden</p>
+              </div>
+
+              {/* Text / icon color */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Text &amp; icon colour</p>
+                <div className="flex gap-2">
+                  {(["default", "black", "white"] as const).map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setBannerTextColor(c)}
+                      className={`px-3 py-1.5 text-xs font-semibold border-2 rounded transition-all ${
+                        bannerTextColor === c
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-background text-foreground hover:border-foreground/50"
+                      }`}
+                    >
+                      {c === "default" ? "Default" : c === "black" ? "Black" : "White"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: live student profile card preview */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Preview — student profile card</p>
+              {(() => {
+                const tc = bannerTextColor;
+                const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
+                const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
+                const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
+                const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                return (
+                  <div className="border-2 border-foreground bg-background flex flex-col font-mono text-foreground w-full max-w-[260px]">
+                    <div className={`px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ minHeight: 140 }}>
+                      {bannerPreviewUrl && (
+                        <>
+                          <img src={bannerPreviewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${bannerOverlayOpacity})` }} />
+                        </>
+                      )}
+                      <div className="relative flex items-start justify-between gap-2">
+                        <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                          <Award className="h-3.5 w-3.5" />
+                        </div>
+                        <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                          generated
+                        </span>
+                      </div>
+                      <div className="relative flex-1">
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
+                        <p className="text-xs font-bold mt-0.5 break-words leading-snug">{batch.name}</p>
+                      </div>
+                      <div className="relative flex items-center gap-1.5 text-[10px]">
+                        <CalendarDays className="h-3 w-3 shrink-0" />
+                        <span className="font-bold uppercase tracking-widest">
+                          {batch.createdAt ? new Date(batch.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex">
+                      <span className="flex-1 flex items-center justify-center gap-1 bg-foreground text-background border-r-2 border-foreground px-2 py-2 text-[9px] font-black uppercase tracking-widest">
+                        <ExternalLink className="h-3 w-3 shrink-0" /> View
+                      </span>
+                      <span className="flex-1 flex items-center justify-center gap-1 bg-background px-2 py-2 text-[9px] font-black uppercase tracking-widest">
+                        <ShieldCheck className="h-3 w-3 shrink-0" /> Verify
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <p className="text-[10px] text-muted-foreground">Live preview of the student's public profile card.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBannerEditorOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleBannerEditorConfirm}
+              disabled={bannerUploading}
+            >
+              {bannerUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+              {bannerUploading ? "Uploading…" : "Save Banner"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Issue Report Detail */}
       <Dialog open={!!activeReport} onOpenChange={(open) => { if (!open) setActiveReport(null); }}>

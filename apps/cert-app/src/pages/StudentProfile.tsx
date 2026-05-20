@@ -15,6 +15,9 @@ interface ProfileCert {
   slideUrl: string | null;
   issuedAt: string | null;
   status: string;
+  bannerUrl: string | null;
+  bannerOverlayOpacity: number;
+  bannerTextColor: string;
 }
 
 interface ProfileData {
@@ -247,27 +250,43 @@ export default function StudentProfile() {
                 const viewUrl = cert.r2PdfUrl || cert.pdfUrl || cert.slideUrl;
                 return (
                   <div key={cert.certId} className="border-2 border-foreground bg-background flex flex-col">
-                    {/* Cert body */}
-                    <div className="px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="border border-foreground p-1.5 shrink-0">
-                          <Award className="h-3.5 w-3.5" />
+                    {/* Cert body — banner is the background */}
+                    {(() => {
+                      const overlayOpacity = cert.bannerOverlayOpacity ?? 0.70;
+                      const tc = cert.bannerTextColor ?? "default";
+                      const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
+                      const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
+                      const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
+                      const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                      return (
+                        <div className={`px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ minHeight: 140 }}>
+                          {cert.bannerUrl && (
+                            <>
+                              <img src={cert.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                              <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }} />
+                            </>
+                          )}
+                          <div className="relative flex items-start justify-between gap-2">
+                            <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                              <Award className="h-3.5 w-3.5" />
+                            </div>
+                            <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                              {cert.status}
+                            </span>
+                          </div>
+                          <div className="relative flex-1">
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
+                            <p className="text-xs font-bold mt-0.5 break-words leading-snug">{cert.batchName}</p>
+                          </div>
+                          <div className="relative flex items-center gap-1.5 text-[10px]">
+                            <CalendarDays className="h-3 w-3 shrink-0" />
+                            <span className="font-bold uppercase tracking-widest">
+                              {cert.issuedAt ? format(new Date(cert.issuedAt), "MMM d, yyyy") : "—"}
+                            </span>
+                          </div>
                         </div>
-                        <span className="border-2 border-foreground px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest">
-                          {cert.status}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Issued For</p>
-                        <p className="text-xs font-bold mt-0.5 break-words leading-snug">{cert.batchName}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px]">
-                        <CalendarDays className="h-3 w-3 shrink-0" />
-                        <span className="font-bold uppercase tracking-widest">
-                          {cert.issuedAt ? format(new Date(cert.issuedAt), "MMM d, yyyy") : "—"}
-                        </span>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     {/* Actions */}
                     <div className="flex">

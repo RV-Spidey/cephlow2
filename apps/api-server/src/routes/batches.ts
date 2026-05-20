@@ -3,7 +3,7 @@ import { supabaseAdmin, toCamel, type Certificate } from "@workspace/supabase";
 import { getSheetsClient } from "../lib/googleSheets.js";
 import { createFolder, makeFilePublic, generateCertificate, uploadPdf } from "../lib/googleDrive.js";
 import { handleGoogleError } from "../lib/googleAuth.js";
-import { deleteR2Objects, isR2Configured } from "../lib/cloudflareR2.js";
+import { deleteR2Objects, isR2Configured, uploadBufferToR2, getR2PublicUrl } from "../lib/cloudflareR2.js";
 import { isWhatsAppConfigured, sendWhatsAppDocument } from "../lib/whatsapp.js";
 import { extractPhoneNumber, bulkUpsertStudentProfiles } from "../lib/certUtils.js";
 import { isApprovedInContext, isUserApproved } from "../lib/approval.js";
@@ -55,6 +55,7 @@ router.post("/batches", async (req, res) => {
       templateKind,
       columnMap, emailColumn, nameColumn, emailSubject, emailBody,
       categoryColumn, categoryTemplateMap, categorySlideMap, categorySlideIndexes,
+      bannerUrl,
     } = req.body;
 
     const sheets = await getSheetsClient(userId);
@@ -112,6 +113,7 @@ router.post("/batches", async (req, res) => {
         category_template_map: categoryTemplateMap || null,
         category_slide_map: categorySlideMap || null,
         category_slide_indexes: categorySlideIndexes || null,
+        banner_url: bannerUrl || null,
         status: "draft",
         drive_folder_id: driveFolderId,
         pdf_folder_id: pdfFolderId,
@@ -180,6 +182,54 @@ router.get("/batches/:batchId", async (req, res) => {
     const result = toCamel(batch);
     result.certificates = (batch.certificates || []).map(toCamel);
     return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Upload a banner image for a batch
+router.post("/batches/:batchId/banner", async (req, res) => {
+  const userId = req.user?.uid;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { batchId } = req.params;
+  const mimeType = (req.headers["content-type"] || "image/jpeg").split(";")[0].trim();
+  if (!mimeType.startsWith("image/")) {
+    return res.status(400).json({ error: "Content-Type must be an image" });
+  }
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/gif" ? "gif" : "jpg";
+
+  try {
+    const { data: batch, error } = await supabaseAdmin
+      .from("batches")
+      .select("user_id, workspace_id")
+      .eq("id", batchId)
+      .single();
+    if (error || !batch) return res.status(404).json({ error: "Batch not found" });
+    if (!canAccessBatch(batch, req)) return res.status(403).json({ error: "Access denied" });
+
+    if (!isR2Configured()) {
+      return res.status(422).json({ error: "Image storage is not configured on this server" });
+    }
+
+    // Collect raw body chunks manually — avoids express.raw() which can be
+    // unreliable in Express 5 when body-parser json is already mounted globally.
+    const imageBuffer = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => resolve(Buffer.concat(chunks)));
+      req.on("error", reject);
+    });
+
+    if (imageBuffer.length === 0) return res.status(400).json({ error: "Empty body" });
+    if (imageBuffer.length > 5 * 1024 * 1024) return res.status(413).json({ error: "Image must be under 5 MB" });
+
+    const key = await uploadBufferToR2(`banners/${batchId}/banner.${ext}`, imageBuffer, mimeType);
+    const url = getR2PublicUrl(key);
+    if (!url) return res.status(500).json({ error: "R2 public URL not configured" });
+
+    await supabaseAdmin.from("batches").update({ banner_url: url }).eq("id", batchId);
+    return res.json({ bannerUrl: url });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -644,6 +694,9 @@ router.patch("/batches/:batchId", async (req, res) => {
       emailColumn: "email_column", nameColumn: "name_column", emailSubject: "email_subject",
       emailBody: "email_body", categoryColumn: "category_column",
       categorySlideMap: "category_slide_map", categorySlideIndexes: "category_slide_indexes",
+      bannerUrl: "banner_url",
+      bannerOverlayOpacity: "banner_overlay_opacity",
+      bannerTextColor: "banner_text_color",
     };
 
     const finalUpdate: Record<string, any> = {};
