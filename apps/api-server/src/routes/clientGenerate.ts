@@ -303,7 +303,8 @@ router.post("/batches/:batchId/presigned-urls", presignedUrlLimiter, async (req,
     const presignedUrls = [];
     for (const cert of certificates) {
       const { certId, recipientName, rowData } = cert;
-      const pdfName = `${(recipientName || "cert").replace(/[^a-zA-Z0-9]/g, "_")}_${(batchName || "batch").replace(/[^a-zA-Z0-9]/g, "_")}`;
+      const shortBatchId = (batchId as string).replace(/-/g, "").slice(0, 8);
+      const pdfName = `${(recipientName || "cert").replace(/[^a-zA-Z0-9]/g, "_")}_${(batchName || "batch").replace(/[^a-zA-Z0-9]/g, "_")}_${shortBatchId}`;
       const phoneNumber = extractPhoneNumber(rowData || {});
       const folderName = phoneNumber || (recipientName || "unknown").replace(/[^a-zA-Z0-9]/g, "_");
 
