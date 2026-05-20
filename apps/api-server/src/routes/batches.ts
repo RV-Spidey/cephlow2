@@ -697,6 +697,9 @@ router.patch("/batches/:batchId", async (req, res) => {
       bannerUrl: "banner_url",
       bannerOverlayOpacity: "banner_overlay_opacity",
       bannerTextColor: "banner_text_color",
+      bannerCropZoom: "banner_crop_zoom",
+      bannerCropX: "banner_crop_x",
+      bannerCropY: "banner_crop_y",
     };
 
     const finalUpdate: Record<string, any> = {};

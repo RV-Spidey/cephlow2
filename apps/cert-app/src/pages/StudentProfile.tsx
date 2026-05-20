@@ -18,6 +18,9 @@ interface ProfileCert {
   bannerUrl: string | null;
   bannerOverlayOpacity: number;
   bannerTextColor: string;
+  bannerCropZoom: number;
+  bannerCropX: number;
+  bannerCropY: number;
 }
 
 interface ProfileData {
@@ -253,6 +256,9 @@ export default function StudentProfile() {
                     {/* Cert body — banner is the background */}
                     {(() => {
                       const overlayOpacity = cert.bannerOverlayOpacity ?? 0.70;
+                      const cropZoom = cert.bannerCropZoom ?? 1.0;
+                      const cropX = cert.bannerCropX ?? 50;
+                      const cropY = cert.bannerCropY ?? 50;
                       const tc = cert.bannerTextColor ?? "default";
                       const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
                       const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
@@ -262,7 +268,7 @@ export default function StudentProfile() {
                         <div className={`px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ minHeight: 140 }}>
                           {cert.bannerUrl && (
                             <>
-                              <img src={cert.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                              <img src={cert.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${cropX}% ${cropY}%`, transform: `scale(${cropZoom})`, transformOrigin: `${cropX}% ${cropY}%` }} />
                               <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${overlayOpacity})` }} />
                             </>
                           )}

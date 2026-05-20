@@ -105,6 +105,12 @@ export default function BatchDetail() {
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
   const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState(0.70);
   const [bannerTextColor, setBannerTextColor] = useState<"default" | "black" | "white">("default");
+  const [bannerCropZoom, setBannerCropZoom] = useState(1.0);
+  const [bannerCropX, setBannerCropX] = useState(50);
+  const [bannerCropY, setBannerCropY] = useState(50);
+  const cropContainerRef = useRef<HTMLDivElement>(null);
+  const cropImageRef = useRef<HTMLImageElement>(null);
+  const [imageBounds, setImageBounds] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
   const handleBannerUpload = async (file: File) => {
     setBannerUploading(true);
@@ -128,13 +134,84 @@ export default function BatchDetail() {
     setBannerPreviewUrl((batch as any).bannerUrl ?? null);
     setBannerOverlayOpacity((batch as any).bannerOverlayOpacity ?? 0.70);
     setBannerTextColor((batch as any).bannerTextColor ?? "default");
+    setBannerCropZoom((batch as any).bannerCropZoom ?? 1.0);
+    setBannerCropX((batch as any).bannerCropX ?? 50);
+    setBannerCropY((batch as any).bannerCropY ?? 50);
     setBannerEditorOpen(true);
   };
 
   const handleBannerEditorFileChange = (file: File) => {
     setBannerPreviewFile(file);
-    const url = URL.createObjectURL(file);
-    setBannerPreviewUrl(url);
+    setBannerPreviewUrl(URL.createObjectURL(file));
+    setBannerCropZoom(1.0);
+    setBannerCropX(50);
+    setBannerCropY(50);
+  };
+
+  const updateImageBounds = () => {
+    if (!cropImageRef.current || !cropContainerRef.current) return;
+    const imgRect = cropImageRef.current.getBoundingClientRect();
+    const containerRect = cropContainerRef.current.getBoundingClientRect();
+    setImageBounds({
+      left: imgRect.left - containerRect.left,
+      top: imgRect.top - containerRect.top,
+      width: imgRect.width,
+      height: imgRect.height,
+    });
+  };
+
+  // Aspect ratio matches a typical profile-page card: ~300px wide / minHeight 140px
+  const CARD_BANNER_ASPECT = 300 / 140;
+
+  const handleCropRectDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!imageBounds) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startCropX = bannerCropX;
+    const startCropY = bannerCropY;
+    const { width: iw, height: ih } = imageBounds;
+    const zoom = bannerCropZoom;
+    // Crop rect half-size as % of full image — used to keep rect inside image bounds
+    const oc_w = Math.min(iw, ih * CARD_BANNER_ASPECT);
+    const oc_h = oc_w / CARD_BANNER_ASPECT;
+    const halfX = (oc_w / (2 * zoom)) / iw * 100;
+    const halfY = (oc_h / (2 * zoom)) / ih * 100;
+    const onMove = (ev: MouseEvent) => {
+      const dx = (ev.clientX - startX) / iw * 100;
+      const dy = (ev.clientY - startY) / ih * 100;
+      setBannerCropX(Math.max(halfX, Math.min(100 - halfX, startCropX + dx)));
+      setBannerCropY(Math.max(halfY, Math.min(100 - halfY, startCropY + dy)));
+    };
+    const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const handleCropRectTouchStart = (e: React.TouchEvent) => {
+    if (!imageBounds || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    const startCropX = bannerCropX;
+    const startCropY = bannerCropY;
+    const { width: iw, height: ih } = imageBounds;
+    const zoom = bannerCropZoom;
+    const oc_w = Math.min(iw, ih * CARD_BANNER_ASPECT);
+    const oc_h = oc_w / CARD_BANNER_ASPECT;
+    const halfX = (oc_w / (2 * zoom)) / iw * 100;
+    const halfY = (oc_h / (2 * zoom)) / ih * 100;
+    const onMove = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      const dx = (t.clientX - startX) / iw * 100;
+      const dy = (t.clientY - startY) / ih * 100;
+      setBannerCropX(Math.max(halfX, Math.min(100 - halfX, startCropX + dx)));
+      setBannerCropY(Math.max(halfY, Math.min(100 - halfY, startCropY + dy)));
+    };
+    const onUp = () => { window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onUp); };
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onUp);
   };
 
   const handleBannerEditorConfirm = async () => {
@@ -150,7 +227,7 @@ export default function BatchDetail() {
       await customFetch(`/api/batches/${batchId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bannerOverlayOpacity, bannerTextColor }),
+        body: JSON.stringify({ bannerOverlayOpacity, bannerTextColor, bannerCropZoom, bannerCropX, bannerCropY }),
       });
       queryClient.invalidateQueries({ queryKey: getGetBatchQueryKey(batchId) });
       toast({ title: "Banner updated" });
@@ -553,6 +630,20 @@ export default function BatchDetail() {
   }, [batchId, batch?.status, isApproved]);
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Recompute image bounds when editor opens, image URL changes, or container resizes
+  useEffect(() => {
+    if (!bannerEditorOpen || !bannerPreviewUrl) { setImageBounds(null); return; }
+    const timer = setTimeout(updateImageBounds, 80);
+    return () => clearTimeout(timer);
+  }, [bannerEditorOpen, bannerPreviewUrl]);
+
+  useEffect(() => {
+    if (!bannerEditorOpen || !cropContainerRef.current) return;
+    const observer = new ResizeObserver(updateImageBounds);
+    observer.observe(cropContainerRef.current);
+    return () => observer.disconnect();
+  }, [bannerEditorOpen]);
+
   if (isLoading) return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" /></div>;
   if (!batch) return <div className="p-8 text-center text-muted-foreground">Batch not found</div>;
 
@@ -649,6 +740,16 @@ export default function BatchDetail() {
             {isSharing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}
             Share PDFs
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBannerEditorOpen}
+            disabled={bannerUploading}
+            className="hover-elevate bg-background"
+          >
+            {bannerUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
+            {(batch as any).bannerUrl ? "Edit Banner" : "Add Banner"}
+          </Button>
           <div className="relative flex items-center gap-1">
             <Button
               variant="outline"
@@ -726,44 +827,6 @@ export default function BatchDetail() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Event Banner */}
-      <Card className="border-border/50 shadow-sm overflow-hidden">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center justify-between">
-            Event Banner
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBannerEditorOpen}
-              disabled={bannerUploading}
-              className="h-7 text-xs"
-            >
-              {bannerUploading ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Eye className="w-3 h-3 mr-1.5" />}
-              {bannerUploading ? "Uploading…" : (batch as any).bannerUrl ? "Edit Banner" : "Add Banner"}
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {(batch as any).bannerUrl ? (
-            <img
-              src={(batch as any).bannerUrl}
-              alt="Event banner"
-              className="w-full rounded object-cover"
-              style={{ maxHeight: 160 }}
-            />
-          ) : (
-            <button
-              onClick={handleBannerEditorOpen}
-              className="w-full border-2 border-dashed border-border rounded flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground hover:border-foreground transition-colors"
-            >
-              <Upload className="w-5 h-5" />
-              <span className="text-xs">Click to add a banner image</span>
-              <span className="text-[10px] opacity-60">Shown on student certificate cards</span>
-            </button>
-          )}
-        </CardContent>
-      </Card>
 
       {/* In-app warning shown while generation is active */}
       {isGenerating && (
@@ -1346,44 +1409,123 @@ export default function BatchDetail() {
         if (!open && bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(bannerPreviewUrl);
         setBannerEditorOpen(open);
       }}>
-        <DialogContent className="sm:max-w-[780px]">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-h-[95vh] lg:h-[95vh] max-w-none flex flex-col p-4 sm:p-6 gap-0 overflow-y-auto lg:overflow-hidden">
+          <DialogHeader className="shrink-0 pb-4">
             <DialogTitle>Event Banner</DialogTitle>
             <DialogDescription>
               Upload a banner image and preview exactly how it will appear on each student's certificate card.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid md:grid-cols-2 gap-6 py-2">
-            {/* Left: upload + appearance controls */}
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Select image</p>
-                <label
-                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border rounded-lg py-8 cursor-pointer hover:border-foreground transition-colors text-muted-foreground"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const file = e.dataTransfer.files?.[0];
-                    if (file && file.type.startsWith("image/")) handleBannerEditorFileChange(file);
+
+          {/* Body — stacks vertically on mobile/tablet, two columns on desktop */}
+          <div className="flex flex-col lg:flex-row lg:flex-1 gap-4 lg:gap-6 lg:min-h-0 lg:overflow-hidden">
+
+            {/* Left: upload + crop zone (crop zone grows to fill on desktop, fixed height on mobile) */}
+            <div className="flex flex-col gap-3 w-full lg:flex-1 lg:min-h-0">
+
+              {/* Image upload — compact strip */}
+              <label
+                className="shrink-0 flex items-center gap-3 border-2 border-dashed border-border rounded-lg px-4 py-3 cursor-pointer hover:border-foreground transition-colors text-muted-foreground"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && file.type.startsWith("image/")) handleBannerEditorFileChange(file);
+                }}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleBannerEditorFileChange(file);
+                    e.target.value = "";
                   }}
-                >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleBannerEditorFileChange(file);
-                      e.target.value = "";
-                    }}
-                  />
-                  <Upload className="w-5 h-5" />
-                  <span className="text-xs">Click or drag &amp; drop an image</span>
-                  {bannerPreviewFile && (
-                    <span className="text-[11px] text-foreground font-medium truncate max-w-[200px]">{bannerPreviewFile.name}</span>
-                  )}
-                </label>
+                />
+                <Upload className="w-4 h-4 shrink-0" />
+                <span className="text-xs">{bannerPreviewFile ? bannerPreviewFile.name : "Click or drag & drop an image"}</span>
+              </label>
+
+              {/* Crop zone — shows full image; draggable crop rectangle defines the banner area */}
+              <div
+                ref={cropContainerRef}
+                className="h-48 sm:h-64 lg:flex-1 lg:min-h-0 relative overflow-hidden rounded border-2 border-border select-none bg-muted/20 flex items-center justify-center"
+              >
+                {bannerPreviewUrl ? (
+                  <>
+                    <img
+                      ref={cropImageRef}
+                      src={bannerPreviewUrl}
+                      alt=""
+                      draggable={false}
+                      onLoad={updateImageBounds}
+                      className="max-w-full max-h-full w-auto h-auto pointer-events-none block"
+                    />
+                    {imageBounds && (() => {
+                      const { left: il, top: it, width: iw, height: ih } = imageBounds;
+                      // Crop rect size = CARD_ASPECT box, 1/zoom of image coverage
+                      const oc_w = Math.min(iw, ih * CARD_BANNER_ASPECT);
+                      const oc_h = oc_w / CARD_BANNER_ASPECT;
+                      const cw = oc_w / bannerCropZoom;
+                      const ch = oc_h / bannerCropZoom;
+                      // Center = cropX/Y as % of FULL IMAGE (free to go anywhere)
+                      const cx = il + (bannerCropX / 100) * iw;
+                      const cy = it + (bannerCropY / 100) * ih;
+                      const rl = Math.max(il, cx - cw / 2);
+                      const rt = Math.max(it, cy - ch / 2);
+                      const rr = Math.min(il + iw, rl + cw);
+                      const rb = Math.min(it + ih, rt + ch);
+                      return (
+                        <>
+                          {/* Single-tier dark overlay outside the crop rect */}
+                          <div className="absolute left-0 right-0 bg-black/55 pointer-events-none" style={{ top: 0, height: rt }} />
+                          <div className="absolute left-0 right-0 bg-black/55 pointer-events-none" style={{ top: rb, bottom: 0 }} />
+                          <div className="absolute bg-black/55 pointer-events-none" style={{ top: rt, height: rb - rt, left: 0, width: rl }} />
+                          <div className="absolute bg-black/55 pointer-events-none" style={{ top: rt, height: rb - rt, left: rr, right: 0 }} />
+                          {/* Draggable crop rectangle */}
+                          <div
+                            className="absolute border-2 border-white cursor-move"
+                            style={{ top: rt, left: rl, width: rr - rl, height: rb - rt }}
+                            onMouseDown={handleCropRectDragStart}
+                            onTouchStart={handleCropRectTouchStart}
+                          >
+                            <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white" />
+                            <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white" />
+                            <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white" />
+                            <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white" />
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground">Upload an image to crop</div>
+                )}
               </div>
+
+              {/* Zoom slider */}
+              <div className="shrink-0 flex items-center gap-3">
+                <span className="text-xs text-muted-foreground shrink-0">Zoom</span>
+                <Slider
+                  min={100} max={300} step={5}
+                  value={[Math.round(bannerCropZoom * 100)]}
+                  onValueChange={([v]) => {
+                    const z = v / 100;
+                    setBannerCropZoom(z);
+                    const minXY = 50 / z;
+                    setBannerCropX(x => Math.max(minXY, Math.min(100 - minXY, x)));
+                    setBannerCropY(y => Math.max(minXY, Math.min(100 - minXY, y)));
+                  }}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground font-mono w-8 text-right">{Math.round(bannerCropZoom * 100)}%</span>
+              </div>
+              <p className="shrink-0 text-[10px] text-muted-foreground">Drag the crop box to reposition · slider to resize it</p>
+            </div>
+
+            {/* Right: appearance controls + live card preview */}
+            <div className="flex flex-col gap-4 sm:gap-5 w-full lg:w-64 lg:shrink-0">
 
               {/* Overlay opacity */}
               <div className="space-y-2">
@@ -1397,13 +1539,13 @@ export default function BatchDetail() {
                   onValueChange={([v]) => setBannerOverlayOpacity(v / 100)}
                   className="w-full"
                 />
-                <p className="text-[10px] text-muted-foreground">0% = image fully visible · 100% = image hidden</p>
+                <p className="text-[10px] text-muted-foreground">0% = fully visible · 100% = hidden</p>
               </div>
 
-              {/* Text / icon color */}
+              {/* Text colour */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Text &amp; icon colour</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {(["default", "black", "white"] as const).map((c) => (
                     <button
                       key={c}
@@ -1419,69 +1561,65 @@ export default function BatchDetail() {
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* Right: live student profile card preview */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Preview — student profile card</p>
-              {(() => {
-                const tc = bannerTextColor;
-                const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
-                const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
-                const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
-                const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
-                return (
-                  <div className="border-2 border-foreground bg-background flex flex-col font-mono text-foreground w-full max-w-[260px]">
-                    <div className={`px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ minHeight: 140 }}>
-                      {bannerPreviewUrl && (
-                        <>
-                          <img src={bannerPreviewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                          <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${bannerOverlayOpacity})` }} />
-                        </>
-                      )}
-                      <div className="relative flex items-start justify-between gap-2">
-                        <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
-                          <Award className="h-3.5 w-3.5" />
+              {/* Live card preview */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Preview</p>
+                {(() => {
+                  const tc = bannerTextColor;
+                  const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
+                  const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
+                  const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
+                  const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                  return (
+                    <div className="border-2 border-foreground bg-background flex flex-col font-mono text-foreground w-full">
+                      <div className={`px-3 py-3 flex flex-col gap-2 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ aspectRatio: "300 / 140" }}>
+                        {bannerPreviewUrl && (
+                          <>
+                            <img src={bannerPreviewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${bannerCropX}% ${bannerCropY}%`, transform: `scale(${bannerCropZoom})`, transformOrigin: `${bannerCropX}% ${bannerCropY}%` }} />
+                            <div className="absolute inset-0" style={{ backgroundColor: `rgba(255,255,255,${bannerOverlayOpacity})` }} />
+                          </>
+                        )}
+                        <div className="relative flex items-start justify-between gap-2">
+                          <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                            <Award className="h-3.5 w-3.5" />
+                          </div>
+                          <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>generated</span>
                         </div>
-                        <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
-                          generated
+                        <div className="relative flex-1">
+                          <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
+                          <p className="text-xs font-bold mt-0.5 break-words leading-snug">{batch.name}</p>
+                        </div>
+                        <div className="relative flex items-center gap-1.5 text-[10px]">
+                          <CalendarDays className="h-3 w-3 shrink-0" />
+                          <span className="font-bold uppercase tracking-widest">
+                            {batch.createdAt ? new Date(batch.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex">
+                        <span className="flex-1 flex items-center justify-center gap-1 bg-foreground text-background border-r-2 border-foreground px-2 py-2 text-[9px] font-black uppercase tracking-widest">
+                          <ExternalLink className="h-3 w-3 shrink-0" /> View
                         </span>
-                      </div>
-                      <div className="relative flex-1">
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
-                        <p className="text-xs font-bold mt-0.5 break-words leading-snug">{batch.name}</p>
-                      </div>
-                      <div className="relative flex items-center gap-1.5 text-[10px]">
-                        <CalendarDays className="h-3 w-3 shrink-0" />
-                        <span className="font-bold uppercase tracking-widest">
-                          {batch.createdAt ? new Date(batch.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                        <span className="flex-1 flex items-center justify-center gap-1 bg-background px-2 py-2 text-[9px] font-black uppercase tracking-widest">
+                          <ShieldCheck className="h-3 w-3 shrink-0" /> Verify
                         </span>
                       </div>
                     </div>
-                    <div className="flex">
-                      <span className="flex-1 flex items-center justify-center gap-1 bg-foreground text-background border-r-2 border-foreground px-2 py-2 text-[9px] font-black uppercase tracking-widest">
-                        <ExternalLink className="h-3 w-3 shrink-0" /> View
-                      </span>
-                      <span className="flex-1 flex items-center justify-center gap-1 bg-background px-2 py-2 text-[9px] font-black uppercase tracking-widest">
-                        <ShieldCheck className="h-3 w-3 shrink-0" /> Verify
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-              <p className="text-[10px] text-muted-foreground">Live preview of the student's public profile card.</p>
+                  );
+                })()}
+                <p className="text-[10px] text-muted-foreground">Live preview of the student's public profile card.</p>
+              </div>
+
             </div>
           </div>
-          <DialogFooter>
+          <div className="shrink-0 flex justify-end gap-2 pt-4 sticky bottom-0 bg-background pb-1">
             <Button variant="outline" onClick={() => setBannerEditorOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleBannerEditorConfirm}
-              disabled={bannerUploading}
-            >
+            <Button onClick={handleBannerEditorConfirm} disabled={bannerUploading}>
               {bannerUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
               {bannerUploading ? "Uploading…" : "Save Banner"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

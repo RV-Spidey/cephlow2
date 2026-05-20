@@ -30,11 +30,12 @@ router.get("/p/:username", async (req, res) => {
 
     // Fetch banner URLs for the batches referenced by these certs
     const batchIds = [...new Set((certsData || []).map((r) => r.batch_id).filter(Boolean))];
-    const bannerByBatchId: Record<string, { banner_url: string | null; banner_overlay_opacity: number; banner_text_color: string }> = {};
+    type BatchMeta = { banner_url: string | null; banner_overlay_opacity: number; banner_text_color: string; banner_crop_zoom: number; banner_crop_x: number; banner_crop_y: number };
+    const bannerByBatchId: Record<string, BatchMeta> = {};
     if (batchIds.length > 0) {
       const { data: batchRows } = await supabaseAdmin
         .from("batches")
-        .select("id, banner_url, banner_overlay_opacity, banner_text_color")
+        .select("id, banner_url, banner_overlay_opacity, banner_text_color, banner_crop_zoom, banner_crop_x, banner_crop_y")
         .in("id", batchIds);
       for (const b of batchRows || []) {
         bannerByBatchId[b.id] = b;
@@ -54,6 +55,9 @@ router.get("/p/:username", async (req, res) => {
       bannerUrl: bannerByBatchId[row.batch_id]?.banner_url ?? null,
       bannerOverlayOpacity: bannerByBatchId[row.batch_id]?.banner_overlay_opacity ?? 0.70,
       bannerTextColor: bannerByBatchId[row.batch_id]?.banner_text_color ?? "default",
+      bannerCropZoom: bannerByBatchId[row.batch_id]?.banner_crop_zoom ?? 1.0,
+      bannerCropX: bannerByBatchId[row.batch_id]?.banner_crop_x ?? 50,
+      bannerCropY: bannerByBatchId[row.batch_id]?.banner_crop_y ?? 50,
     }));
 
     return res.json({ slug: profile.slug, name: profile.name, certificates });
