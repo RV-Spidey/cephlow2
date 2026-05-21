@@ -260,12 +260,15 @@ export default function StudentProfile() {
                       const cropX = cert.bannerCropX ?? 50;
                       const cropY = cert.bannerCropY ?? 50;
                       const tc = cert.bannerTextColor ?? "default";
-                      const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
-                      const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
-                      const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
-                      const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                      const isHex = tc.startsWith("#");
+                      const colorStyle = isHex ? { color: tc } : {};
+                      const borderColorStyle = isHex ? { borderColor: tc, color: tc } : {};
+                      const mutedColorStyle = isHex ? { color: tc, opacity: 0.75 } : {};
+                      const bgBadge = isHex ? undefined : tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                      const borderClass = !isHex ? (tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground") : "";
+                      const mutedClass = !isHex ? (tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground") : "";
                       return (
-                        <div className={`px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ minHeight: 140 }}>
+                        <div className="px-3 py-3 flex flex-col gap-2 flex-1 border-b-2 border-foreground relative overflow-hidden" style={{ minHeight: 140, ...colorStyle }}>
                           {cert.bannerUrl && (
                             <>
                               <img src={cert.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${cropX}% ${cropY}%`, transform: `scale(${cropZoom})`, transformOrigin: `${cropX}% ${cropY}%` }} />
@@ -273,15 +276,15 @@ export default function StudentProfile() {
                             </>
                           )}
                           <div className="relative flex items-start justify-between gap-2">
-                            <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                            <div className={`border p-1.5 shrink-0 ${borderClass}`} style={{ ...borderColorStyle, ...(bgBadge ? { backgroundColor: bgBadge } : {}) }}>
                               <Award className="h-3.5 w-3.5" />
                             </div>
-                            <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                            <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={{ ...borderColorStyle, ...(bgBadge ? { backgroundColor: bgBadge } : {}) }}>
                               {cert.status}
                             </span>
                           </div>
                           <div className="relative flex-1">
-                            <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`} style={mutedColorStyle}>Issued For</p>
                             <p className="text-xs font-bold mt-0.5 break-words leading-snug">{cert.batchName}</p>
                           </div>
                           <div className="relative flex items-center gap-1.5 text-[10px]">

@@ -104,7 +104,7 @@ export default function BatchDetail() {
   const [bannerPreviewFile, setBannerPreviewFile] = useState<File | null>(null);
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
   const [bannerOverlayOpacity, setBannerOverlayOpacity] = useState(0.70);
-  const [bannerTextColor, setBannerTextColor] = useState<"default" | "black" | "white">("default");
+  const [bannerTextColor, setBannerTextColor] = useState<string>("default");
   const [bannerCropZoom, setBannerCropZoom] = useState(1.0);
   const [bannerCropX, setBannerCropX] = useState(50);
   const [bannerCropY, setBannerCropY] = useState(50);
@@ -142,10 +142,42 @@ export default function BatchDetail() {
 
   const handleBannerEditorFileChange = (file: File) => {
     setBannerPreviewFile(file);
-    setBannerPreviewUrl(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setBannerPreviewUrl(url);
     setBannerCropZoom(1.0);
     setBannerCropX(50);
     setBannerCropY(50);
+    // Auto-detect best text colour via WCAG contrast ratio
+    const img = new Image();
+    img.onload = () => {
+      const W = 64, H = 32;
+      const canvas = document.createElement("canvas");
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, W, H);
+      const { data } = ctx.getImageData(0, 0, W, H);
+      let rSum = 0, gSum = 0, bSum = 0;
+      const px = W * H;
+      for (let i = 0; i < data.length; i += 4) {
+        rSum += data[i]; gSum += data[i + 1]; bSum += data[i + 2];
+      }
+      const avgR = rSum / px / 255, avgG = gSum / px / 255, avgB = bSum / px / 255;
+      const lin = (c: number) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      const bgLum = 0.2126 * lin(avgR) + 0.7152 * lin(avgG) + 0.0722 * lin(avgB);
+      const contrast = (hex: string) => {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const fgLum = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        const hi = Math.max(bgLum, fgLum), lo = Math.min(bgLum, fgLum);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+      const palette = ["#FFFFFF", "#000000", "#FFD700", "#00E5FF", "#FF6B6B", "#CCFF00", "#FF9800", "#E040FB"];
+      const best = palette.reduce((a, b) => contrast(a) >= contrast(b) ? a : b);
+      setBannerTextColor(best);
+    };
+    img.src = url;
   };
 
   const updateImageBounds = () => {
@@ -1545,21 +1577,45 @@ export default function BatchDetail() {
               {/* Text colour */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Text &amp; icon colour</p>
-                <div className="flex flex-wrap gap-2">
-                  {(["default", "black", "white"] as const).map((c) => (
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button
+                    onClick={() => setBannerTextColor("default")}
+                    className={`px-3 py-1.5 text-xs font-semibold border-2 rounded transition-all ${bannerTextColor === "default" ? "border-foreground bg-foreground text-background" : "border-border bg-background text-foreground hover:border-foreground/50"}`}
+                  >Default</button>
+                  {["#FFFFFF","#000000","#FFD700","#00E5FF","#FF6B6B","#CCFF00","#FF9800","#E040FB"].map((hex) => (
                     <button
-                      key={c}
-                      onClick={() => setBannerTextColor(c)}
-                      className={`px-3 py-1.5 text-xs font-semibold border-2 rounded transition-all ${
-                        bannerTextColor === c
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-foreground hover:border-foreground/50"
-                      }`}
-                    >
-                      {c === "default" ? "Default" : c === "black" ? "Black" : "White"}
-                    </button>
+                      key={hex}
+                      title={hex}
+                      onClick={() => setBannerTextColor(hex)}
+                      className="w-7 h-7 rounded-full border-2 transition-all"
+                      style={{
+                        backgroundColor: hex,
+                        borderColor: bannerTextColor === hex ? "#000" : "#ccc",
+                        boxShadow: bannerTextColor === hex ? "0 0 0 2px #fff, 0 0 0 4px #000" : undefined,
+                      }}
+                    />
                   ))}
+                  {/* Full spectrum picker */}
+                  <label
+                    title="Custom colour"
+                    className="w-7 h-7 rounded-full border-2 cursor-pointer overflow-hidden shrink-0 transition-all"
+                    style={{
+                      background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                      borderColor: (bannerTextColor.startsWith("#") && !["#FFFFFF","#000000","#FFD700","#00E5FF","#FF6B6B","#CCFF00","#FF9800","#E040FB"].includes(bannerTextColor)) ? "#000" : "#ccc",
+                      boxShadow: (bannerTextColor.startsWith("#") && !["#FFFFFF","#000000","#FFD700","#00E5FF","#FF6B6B","#CCFF00","#FF9800","#E040FB"].includes(bannerTextColor)) ? "0 0 0 2px #fff, 0 0 0 4px #000" : undefined,
+                    }}
+                  >
+                    <input
+                      type="color"
+                      className="opacity-0 w-full h-full cursor-pointer"
+                      value={bannerTextColor.startsWith("#") ? bannerTextColor : "#ffffff"}
+                      onChange={(e) => setBannerTextColor(e.target.value.toUpperCase())}
+                    />
+                  </label>
                 </div>
+                {bannerTextColor.startsWith("#") && (
+                  <p className="text-[10px] text-muted-foreground font-mono">{bannerTextColor}</p>
+                )}
               </div>
 
               {/* Live card preview */}
@@ -1567,13 +1623,17 @@ export default function BatchDetail() {
                 <p className="text-sm font-medium">Preview</p>
                 {(() => {
                   const tc = bannerTextColor;
-                  const textClass = tc === "white" ? "text-white" : tc === "black" ? "text-black" : "";
-                  const mutedClass = tc === "white" ? "text-white/70" : tc === "black" ? "text-black/60" : "text-muted-foreground";
-                  const borderClass = tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground";
-                  const bgBadge = tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                  const isHex = tc.startsWith("#");
+                  const colorStyle = isHex ? { color: tc } : {};
+                  const borderColorStyle = isHex ? { borderColor: tc, color: tc } : {};
+                  const mutedColorStyle = isHex ? { color: tc, opacity: 0.75 } : {};
+                  const bgBadge = isHex
+                    ? undefined
+                    : tc === "white" ? "rgba(0,0,0,0.35)" : tc === "black" ? "rgba(255,255,255,0.45)" : undefined;
+                  const borderClass = !isHex ? (tc === "white" ? "border-white" : tc === "black" ? "border-black" : "border-foreground") : "";
                   return (
                     <div className="border-2 border-foreground bg-background flex flex-col font-mono text-foreground w-full">
-                      <div className={`px-3 py-3 flex flex-col gap-2 border-b-2 border-foreground relative overflow-hidden ${textClass}`} style={{ aspectRatio: "300 / 140" }}>
+                      <div className="px-3 py-3 flex flex-col gap-2 border-b-2 border-foreground relative overflow-hidden" style={{ aspectRatio: "300 / 140", ...colorStyle }}>
                         {bannerPreviewUrl && (
                           <>
                             <img src={bannerPreviewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: `${bannerCropX}% ${bannerCropY}%`, transform: `scale(${bannerCropZoom})`, transformOrigin: `${bannerCropX}% ${bannerCropY}%` }} />
@@ -1581,13 +1641,13 @@ export default function BatchDetail() {
                           </>
                         )}
                         <div className="relative flex items-start justify-between gap-2">
-                          <div className={`border p-1.5 shrink-0 ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>
+                          <div className={`border p-1.5 shrink-0 ${borderClass}`} style={{ ...borderColorStyle, ...(bgBadge ? { backgroundColor: bgBadge } : {}) }}>
                             <Award className="h-3.5 w-3.5" />
                           </div>
-                          <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={bgBadge ? { backgroundColor: bgBadge } : undefined}>generated</span>
+                          <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={{ ...borderColorStyle, ...(bgBadge ? { backgroundColor: bgBadge } : {}) }}>generated</span>
                         </div>
                         <div className="relative flex-1">
-                          <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`}>Issued For</p>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest ${!isHex && tc !== "white" && tc !== "black" ? "text-muted-foreground" : ""}`} style={mutedColorStyle}>Issued For</p>
                           <p className="text-xs font-bold mt-0.5 break-words leading-snug">{batch.name}</p>
                         </div>
                         <div className="relative flex items-center gap-1.5 text-[10px]">
