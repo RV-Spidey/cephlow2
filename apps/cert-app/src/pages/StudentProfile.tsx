@@ -283,15 +283,18 @@ export default function StudentProfile() {
                               {cert.status}
                             </span>
                           </div>
-                          <div className="relative flex-1">
-                            <p className={`text-[10px] font-bold uppercase tracking-widest ${mutedClass}`} style={mutedColorStyle}>Issued For</p>
-                            <p className="text-xs font-bold mt-0.5 break-words leading-snug">{cert.batchName}</p>
-                          </div>
-                          <div className="relative flex items-center gap-1.5 text-[10px]">
-                            <CalendarDays className="h-3 w-3 shrink-0" />
-                            <span className="font-bold uppercase tracking-widest">
-                              {cert.issuedAt ? format(new Date(cert.issuedAt), "MMM d, yyyy") : "—"}
-                            </span>
+                          <div className="relative flex-1" />
+                          <div className="relative flex items-end justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              <CalendarDays className="h-3 w-3 shrink-0" />
+                              <span className="font-bold uppercase tracking-widest">
+                                {cert.issuedAt ? format(new Date(cert.issuedAt), "MMM d, yyyy") : "—"}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-[9px] font-bold uppercase tracking-widest ${mutedClass}`} style={mutedColorStyle}>Issued For</p>
+                              <p className="text-xs font-bold break-words leading-snug">{cert.batchName}</p>
+                            </div>
                           </div>
                         </div>
                       );

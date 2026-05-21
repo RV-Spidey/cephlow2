@@ -1646,15 +1646,18 @@ export default function BatchDetail() {
                           </div>
                           <span className={`border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${borderClass}`} style={{ ...borderColorStyle, ...(bgBadge ? { backgroundColor: bgBadge } : {}) }}>generated</span>
                         </div>
-                        <div className="relative flex-1">
-                          <p className={`text-[10px] font-bold uppercase tracking-widest ${!isHex && tc !== "white" && tc !== "black" ? "text-muted-foreground" : ""}`} style={mutedColorStyle}>Issued For</p>
-                          <p className="text-xs font-bold mt-0.5 break-words leading-snug">{batch.name}</p>
-                        </div>
-                        <div className="relative flex items-center gap-1.5 text-[10px]">
-                          <CalendarDays className="h-3 w-3 shrink-0" />
-                          <span className="font-bold uppercase tracking-widest">
-                            {batch.createdAt ? new Date(batch.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
-                          </span>
+                        <div className="relative flex-1" />
+                        <div className="relative flex items-end justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <CalendarDays className="h-3 w-3 shrink-0" />
+                            <span className="font-bold uppercase tracking-widest">
+                              {batch.createdAt ? new Date(batch.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-[9px] font-bold uppercase tracking-widest ${!isHex && tc !== "white" && tc !== "black" ? "text-muted-foreground" : ""}`} style={mutedColorStyle}>Issued For</p>
+                            <p className="text-xs font-bold break-words leading-snug">{batch.name}</p>
+                          </div>
                         </div>
                       </div>
                       <div className="flex">
