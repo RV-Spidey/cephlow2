@@ -234,6 +234,7 @@ export default function BatchDetail() {
     const halfX = (oc_w / (2 * zoom)) / iw * 100;
     const halfY = (oc_h / (2 * zoom)) / ih * 100;
     const onMove = (ev: TouchEvent) => {
+      ev.preventDefault();
       if (ev.touches.length !== 1) return;
       const t = ev.touches[0];
       const dx = (t.clientX - startX) / iw * 100;
@@ -242,7 +243,7 @@ export default function BatchDetail() {
       setBannerCropY(Math.max(halfY, Math.min(100 - halfY, startCropY + dy)));
     };
     const onUp = () => { window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onUp); };
-    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: false });
     window.addEventListener("touchend", onUp);
   };
 
