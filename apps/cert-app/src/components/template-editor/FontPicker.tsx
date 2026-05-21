@@ -62,7 +62,12 @@ export function FontPicker({ value, onChange }: Props) {
       if (panelRef.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
-    const onResize = () => setOpen(false);
+    // Close on resize only if the panel would be mispositioned — ignore
+    // keyboard-induced resizes on mobile (those only shrink window.innerHeight).
+    const baseWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth !== baseWidth) setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -119,7 +124,6 @@ export function FontPicker({ value, onChange }: Props) {
             <div className="flex items-center gap-2 px-2 pb-2 border-b">
               <Search className="h-4 w-4 opacity-60" />
               <Input
-                autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search fonts..."
