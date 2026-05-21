@@ -1409,7 +1409,7 @@ export default function BatchDetail() {
         if (!open && bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(bannerPreviewUrl);
         setBannerEditorOpen(open);
       }}>
-        <DialogContent className="w-[95vw] max-h-[95vh] lg:h-[95vh] max-w-none flex flex-col p-4 sm:p-6 gap-0 overflow-y-auto lg:overflow-hidden">
+        <DialogContent className="w-[95vw] max-h-[95vh] lg:h-[95vh] max-w-none flex flex-col p-4 sm:p-6 gap-0 overflow-hidden">
           <DialogHeader className="shrink-0 pb-4">
             <DialogTitle>Event Banner</DialogTitle>
             <DialogDescription>
@@ -1418,7 +1418,7 @@ export default function BatchDetail() {
           </DialogHeader>
 
           {/* Body — stacks vertically on mobile/tablet, two columns on desktop */}
-          <div className="flex flex-col lg:flex-row lg:flex-1 gap-4 lg:gap-6 lg:min-h-0 lg:overflow-hidden">
+          <div className="flex flex-col lg:flex-row flex-1 gap-4 lg:gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
 
             {/* Left: upload + crop zone (crop zone grows to fill on desktop, fixed height on mobile) */}
             <div className="flex flex-col gap-3 w-full lg:flex-1 lg:min-h-0">
@@ -1613,7 +1613,7 @@ export default function BatchDetail() {
 
             </div>
           </div>
-          <div className="shrink-0 flex justify-end gap-2 pt-4 sticky bottom-0 bg-background pb-1">
+          <div className="shrink-0 flex justify-end gap-2 pt-4 border-t border-border mt-2">
             <Button variant="outline" onClick={() => setBannerEditorOpen(false)}>Cancel</Button>
             <Button onClick={handleBannerEditorConfirm} disabled={bannerUploading}>
               {bannerUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
