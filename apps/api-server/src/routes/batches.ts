@@ -55,7 +55,7 @@ router.post("/batches", async (req, res) => {
       templateKind,
       columnMap, emailColumn, nameColumn, emailSubject, emailBody,
       categoryColumn, categoryTemplateMap, categorySlideMap, categorySlideIndexes,
-      bannerUrl,
+      bannerUrl, frameTier,
     } = req.body;
 
     const sheets = await getSheetsClient(userId);
@@ -114,6 +114,7 @@ router.post("/batches", async (req, res) => {
         category_slide_map: categorySlideMap || null,
         category_slide_indexes: categorySlideIndexes || null,
         banner_url: bannerUrl || null,
+        frame_tier: frameTier || 'none',
         status: "draft",
         drive_folder_id: driveFolderId,
         pdf_folder_id: pdfFolderId,
@@ -222,7 +223,7 @@ router.post("/batches/:batchId/banner", async (req, res) => {
     });
 
     if (imageBuffer.length === 0) return res.status(400).json({ error: "Empty body" });
-    if (imageBuffer.length > 5 * 1024 * 1024) return res.status(413).json({ error: "Image must be under 5 MB" });
+    if (imageBuffer.length > 1 * 1024 * 1024) return res.status(413).json({ error: "Image must be under 1 MB" });
 
     const key = await uploadBufferToR2(`banners/${batchId}/banner.${ext}`, imageBuffer, mimeType);
     const url = getR2PublicUrl(key);
@@ -230,6 +231,129 @@ router.post("/batches/:batchId/banner", async (req, res) => {
 
     await supabaseAdmin.from("batches").update({ banner_url: url }).eq("id", batchId);
     return res.json({ bannerUrl: url });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Frame tier costs loaded from env vars (₹ per batch, one-time charge on first use)
+function getFrameCosts(): Record<string, number> {
+  const e = process.env;
+  return {
+    bronze:            Number(e.FRAME_COST_BRONZE            ?? 2),
+    silver:            Number(e.FRAME_COST_SILVER            ?? 5),
+    gold:              Number(e.FRAME_COST_GOLD              ?? 10),
+    cyberpunk:         Number(e.FRAME_COST_CYBERPUNK         ?? 15),
+    fire:              Number(e.FRAME_COST_FIRE              ?? 15),
+    ice:               Number(e.FRAME_COST_ICE               ?? 15),
+    matrix:            Number(e.FRAME_COST_MATRIX            ?? 15),
+    holographic:       Number(e.FRAME_COST_HOLOGRAPHIC       ?? 20),
+    "neon-pulse":      Number(e.FRAME_COST_NEON_PULSE        ?? 20),
+    "hud-grid-blue":   Number(e.FRAME_COST_HUD_GRID_BLUE    ?? 20),
+    "hud-grid-purple": Number(e.FRAME_COST_HUD_GRID_PURPLE  ?? 20),
+    "hud-grid-gold":   Number(e.FRAME_COST_HUD_GRID_GOLD    ?? 20),
+    "hud-command-blue":Number(e.FRAME_COST_HUD_COMMAND_BLUE ?? 20),
+    "hud-command-gold":Number(e.FRAME_COST_HUD_COMMAND_GOLD ?? 20),
+    // custom: cost key for any workspace-designed frame (value: custom:{uuid})
+    custom:            Number(e.FRAME_COST_CUSTOM            ?? 20),
+  };
+}
+
+// Resolve the cost-map key for a frame tier string
+// custom:{uuid} → looks up 'custom' key
+function frameCostKey(tier: string): string {
+  return tier.startsWith("custom:") ? "custom" : tier;
+}
+
+// Return frame costs so the frontend can show pricing
+router.get("/frame-costs", (_req, res) => {
+  return res.json(getFrameCosts());
+});
+
+// Update banner appearance settings (POST avoids PATCH being blocked by some proxies/CDNs)
+router.post("/batches/:batchId/banner-settings", async (req, res) => {
+  const userId = req.user?.uid;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { batchId } = req.params;
+  const { bannerOverlayOpacity, bannerTextColor, bannerCropZoom, bannerCropX, bannerCropY, frameTier } = req.body;
+
+  try {
+    const { data: batch, error } = await supabaseAdmin
+      .from("batches")
+      .select("user_id, workspace_id, frame_tier, paid_frames")
+      .eq("id", batchId)
+      .single();
+    if (error || !batch) return res.status(404).json({ error: "Batch not found" });
+    if (!canAccessBatch(batch, req)) return res.status(403).json({ error: "Access denied" });
+
+    const paidFrames: string[] = batch.paid_frames ?? [];
+
+    // If it's a custom frame, verify it exists in this workspace
+    if (frameTier !== undefined && typeof frameTier === 'string' && frameTier.startsWith('custom:')) {
+      const customId = frameTier.slice(7);
+      const { data: cf, error: cfErr } = await supabaseAdmin
+        .from("custom_frames")
+        .select("id")
+        .eq("id", customId)
+        .eq("workspace_id", batch.workspace_id)
+        .maybeSingle();
+      if (cfErr || !cf) return res.status(404).json({ error: "Custom frame not found in this workspace" });
+    }
+
+    // Charge only if this specific frame has never been purchased for this batch
+    if (frameTier !== undefined && frameTier !== 'none' && !paidFrames.includes(frameTier)) {
+      const costs = getFrameCosts();
+      const cost = costs[frameCostKey(frameTier)] ?? 0;
+      if (cost > 0) {
+        const workspaceId = batch.workspace_id;
+        const { data: ws, error: wsErr } = await supabaseAdmin
+          .from("workspaces")
+          .select("current_balance")
+          .eq("id", workspaceId)
+          .single();
+        if (wsErr || !ws) return res.status(500).json({ error: "Could not read workspace balance" });
+
+        const currentBalance = Number(ws.current_balance ?? 0);
+        if (currentBalance < cost) {
+          return res.status(402).json({
+            error: "Insufficient balance",
+            code: "insufficient_funds",
+            required: cost,
+            available: currentBalance,
+          });
+        }
+
+        const newBalance = currentBalance - cost;
+        await supabaseAdmin.from("workspaces").update({ current_balance: newBalance }).eq("id", workspaceId);
+        await supabaseAdmin.from("ledgers").insert({
+          user_id: userId,
+          workspace_id: workspaceId,
+          type: "deduction",
+          amount: -cost,
+          balance_after: newBalance,
+          description: `Certificate frame: ${frameTier}`,
+          metadata: { batchId, frameTier, cost },
+        });
+        // Mark this frame as purchased so re-selecting it later is free
+        await supabaseAdmin
+          .from("batches")
+          .update({ paid_frames: [...paidFrames, frameTier] })
+          .eq("id", batchId);
+      }
+    }
+
+    const updatePayload: Record<string, any> = {
+      banner_overlay_opacity: bannerOverlayOpacity,
+      banner_text_color: bannerTextColor,
+      banner_crop_zoom: bannerCropZoom,
+      banner_crop_x: bannerCropX,
+      banner_crop_y: bannerCropY,
+    };
+    if (frameTier !== undefined) updatePayload.frame_tier = frameTier;
+    await supabaseAdmin.from("batches").update(updatePayload).eq("id", batchId);
+
+    return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -476,7 +600,6 @@ router.post("/batches/:batchId/send-whatsapp", requireApproval, async (req, res)
       .eq("id", batchId)
       .single();
     if (error || !batchRow) return res.status(404).json({ error: "Batch not found" });
-    const batch = toCamel(batchRow) as any;
     if (!canAccessBatch(batchRow, req)) return res.status(403).json({ error: "Access denied" });
 
     const { var1Template, var2Template, var3Template } = req.body;

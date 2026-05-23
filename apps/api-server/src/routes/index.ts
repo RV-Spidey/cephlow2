@@ -11,6 +11,7 @@ import builtinTemplatesRouter from "./builtinTemplates.js";
 import reportsRouter from "./reports.js";
 import approvalRouter from "./approval.js";
 import workspacesRouter from "./workspaces.js";
+import frameTemplatesRouter from "./frameTemplates.js";
 import { requireApproval } from "../middlewares/requireApproval.js";
 import { requireWorkspace } from "../middlewares/requireWorkspace.js";
 
@@ -29,6 +30,7 @@ router.use(requireWorkspace);
 
 router.use(sheetsRouter);
 router.use(batchesRouter);
+router.use(frameTemplatesRouter);
 router.use(certificatesRouter);
 router.use(paymentsRouter);
 router.use(clientGenerateRouter);

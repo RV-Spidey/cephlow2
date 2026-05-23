@@ -79,6 +79,8 @@ export default function NewBatchWizard() {
   const [emailColumn, setEmailColumn] = useState("");
   const [nameColumn, setNameColumn] = useState("");
 
+  const [frameTier, setFrameTier] = useState("none");
+
   const [emailSubject, setEmailSubject] = useState("Your Certificate is ready!");
   const [emailBody, setEmailBody] = useState("Hi ,\n\nHere is your certificate attached.\n\nBest,\nThe Team");
 
@@ -171,6 +173,7 @@ export default function NewBatchWizard() {
           emailSubject,
           emailBody,
           ...(multiTemplateMode && categoryColumn ? { categoryColumn, categorySlideMap: finalSlideMap } : {}),
+          frameTier,
         } as any,
       });
 
@@ -267,6 +270,8 @@ export default function NewBatchWizard() {
                   bannerPreviewUrl={bannerPreviewUrl}
                   onBannerFileChange={(file) => { setBannerFile(file); setBannerPreviewUrl(URL.createObjectURL(file)); }}
                   onBannerClear={() => { setBannerFile(null); setBannerPreviewUrl(""); }}
+                  frameTier={frameTier}
+                  onFrameTierChange={setFrameTier}
                 />
               )}
               {step === 1 && (

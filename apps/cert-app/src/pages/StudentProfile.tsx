@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Award, CalendarDays, Check, ExternalLink, Loader2, Pencil, ShieldCheck, User, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { HudGridSvg, HudCommandSvg, CustomFrameRenderer, type CustomFrameConfig } from "@/components/CustomFrameRenderer";
 
 interface ProfileCert {
   certId: string;
@@ -21,12 +22,23 @@ interface ProfileCert {
   bannerCropZoom: number;
   bannerCropX: number;
   bannerCropY: number;
+  frameTier: string;
+  customFrameConfig?: CustomFrameConfig | null;
 }
 
 interface ProfileData {
   slug: string;
   name: string;
   certificates: ProfileCert[];
+}
+
+function HudFrame({ tier }: { tier: string }) {
+  if (tier === 'hud-grid-blue')    return <HudGridSvg    color="#00aaff" glow="rgba(0,170,255,0.6)"/>;
+  if (tier === 'hud-grid-purple')  return <HudGridSvg    color="#aa55ff" glow="rgba(170,85,255,0.6)"/>;
+  if (tier === 'hud-grid-gold')    return <HudGridSvg    color="#ffaa00" glow="rgba(255,170,0,0.6)"/>;
+  if (tier === 'hud-command-blue') return <HudCommandSvg color="#00aaff" glow="rgba(0,170,255,0.5)"/>;
+  if (tier === 'hud-command-gold') return <HudCommandSvg color="#ffaa00" glow="rgba(255,170,0,0.5)"/>;
+  return null;
 }
 
 export default function StudentProfile() {
@@ -251,8 +263,15 @@ export default function StudentProfile() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {profile.certificates.map((cert) => {
                 const viewUrl = cert.r2PdfUrl || cert.pdfUrl || cert.slideUrl;
-                return (
-                  <div key={cert.certId} className="border-2 border-foreground bg-background flex flex-col">
+                const tier = cert.frameTier ?? 'none';
+                const isHud = tier.startsWith('hud-');
+                const isCustom = tier.startsWith('custom:');
+                const frameWrapClass = tier !== 'none' && !isCustom
+                  ? `cert-frame-wrapper frame-${tier}`
+                  : undefined;
+
+                const cardInner = (
+                  <div className="border-2 border-foreground bg-background flex flex-col cert-card-inner" style={{ position: 'relative' }}>
                     {/* Cert body — banner is the background */}
                     {(() => {
                       const overlayOpacity = cert.bannerOverlayOpacity ?? 0.70;
@@ -325,6 +344,23 @@ export default function StudentProfile() {
                     </div>
                   </div>
                 );
+
+                if (isCustom && cert.customFrameConfig) {
+                  return (
+                    <CustomFrameRenderer key={cert.certId} frameId={tier.slice(7)} config={cert.customFrameConfig}>
+                      {cardInner}
+                    </CustomFrameRenderer>
+                  );
+                }
+                if (frameWrapClass) {
+                  return (
+                    <div key={cert.certId} className={frameWrapClass}>
+                      {isHud && <HudFrame tier={tier} />}
+                      {cardInner}
+                    </div>
+                  );
+                }
+                return <div key={cert.certId}>{cardInner}</div>;
               })}
             </div>
           </div>

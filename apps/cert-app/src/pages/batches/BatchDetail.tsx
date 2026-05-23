@@ -409,7 +409,11 @@ export default function BatchDetail() {
         onOpenChange={setBannerEditorOpen}
         batchId={batchId}
         batch={batch}
-        onSaved={() => queryClient.invalidateQueries({ queryKey: getGetBatchQueryKey(batchId) })}
+        walletBalance={balanceData?.currentBalance ?? 0}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: getGetBatchQueryKey(batchId) });
+          refetchBalance();
+        }}
         onUploadingChange={setBannerUploading}
       />
 

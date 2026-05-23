@@ -325,3 +325,95 @@
 .dark .react-flow__controls-button svg {
   fill: hsl(var(--foreground));
 }
+
+/* ─── Certificate Frame Animations ─────────────────────────────────── */
+
+@keyframes frame-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes frame-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+@keyframes frame-scan {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
+
+/* Shared wrapper — gradient frames use padding + rotating pseudo-element */
+.cert-frame-wrapper {
+  padding: 2px;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.cert-frame-wrapper::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  transform-origin: 50% 50%;
+  z-index: -1;
+  animation: frame-spin 4s linear infinite;
+}
+/* HUD frames: no padding/pseudo-element — the SVG overlay handles the border */
+.cert-frame-wrapper[class*="frame-hud-"] {
+  padding: 0;
+  overflow: visible;
+}
+.cert-frame-wrapper[class*="frame-hud-"]::before {
+  display: none;
+}
+
+/* Bronze */
+.frame-bronze::before {
+  background: conic-gradient(#5c2a00, #a0522d, #cd7f32, #e8a060, #ffd700, #e8a060, #cd7f32, #a0522d, #5c2a00);
+}
+/* Silver */
+.frame-silver::before {
+  background: conic-gradient(#444, #888, #bbb, #e8e8e8, #fff, #e8e8e8, #bbb, #888, #444);
+  animation-duration: 5s;
+}
+/* Gold */
+.frame-gold::before {
+  background: conic-gradient(#7d5a00, #c8900a, #ffd700, #ffe566, #fff6b0, #ffe566, #ffd700, #c8900a, #7d5a00);
+  animation-duration: 3s;
+}
+/* Cyberpunk — fast neon magenta/cyan */
+.frame-cyberpunk::before {
+  background: conic-gradient(#ff00ff, #00ffff, #ff00ff, #00ffff, #ff00ff);
+  animation-duration: 1.8s;
+}
+/* Fire */
+.frame-fire::before {
+  background: conic-gradient(#1a0000, #8b0000, #ff4500, #ff8c00, #ffd700, #ff8c00, #ff4500, #8b0000, #1a0000);
+  animation-duration: 2.5s;
+}
+/* Ice */
+.frame-ice::before {
+  background: conic-gradient(#001a2e, #0077b6, #00b4d8, #90e0ef, #caf0f8, #90e0ef, #00b4d8, #0077b6, #001a2e);
+  animation-duration: 4s;
+}
+/* Matrix / terminal green */
+.frame-matrix::before {
+  background: conic-gradient(#001000, #003300, #00aa00, #00ff41, #80ff80, #00ff41, #00aa00, #003300, #001000);
+  animation-duration: 3s;
+}
+/* Holographic — rainbow */
+.frame-holographic::before {
+  background: conic-gradient(#ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000);
+  animation-duration: 3s;
+}
+/* Neon pulse — white/teal glow that pulses rather than spins */
+.frame-neon-pulse::before {
+  background: conic-gradient(#004444, #00ffcc, #ffffff, #00ffcc, #004444, #00ffcc, #ffffff, #00ffcc, #004444);
+  animation: frame-spin 2.5s linear infinite, frame-pulse 1.5s ease-in-out infinite;
+}
+
+/* HUD frames — SVG overlay handles visuals, suppress ::after scan line */
+.cert-frame-wrapper[class*="frame-hud-"]::after {
+  display: none;
+}
+
