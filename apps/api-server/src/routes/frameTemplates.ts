@@ -121,6 +121,19 @@ router.delete("/frame-templates/:id", async (req, res) => {
       });
     }
 
+    const { data: hasListing } = await supabaseAdmin
+      .from("frame_listings")
+      .select("id")
+      .eq("frame_id", id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    if (hasListing) {
+      return res.status(409).json({
+        error: "This frame has an active marketplace listing. Unpublish it before deleting.",
+      });
+    }
+
     await supabaseAdmin.from("custom_frames").delete().eq("id", id);
     return res.json({ success: true });
   } catch (err: any) {

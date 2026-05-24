@@ -4,9 +4,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Upload, Loader2, Award, CalendarDays, ShieldCheck, ExternalLink, Check, Plus } from "lucide-react";
-import { HudGridSvg, HudCommandSvg, CustomFrameRenderer, type CustomFrameConfig } from "@/components/CustomFrameRenderer";
+import { Upload, Loader2, Award, CalendarDays, ShieldCheck, ExternalLink, Check, Plus, ShoppingBag } from "lucide-react";
+import { HudFrameByTier, CustomFrameRenderer, type CustomFrameConfig } from "@/components/CustomFrameRenderer";
 import { CustomFrameDesigner } from "./CustomFrameDesigner";
+import { MarketplaceBrowseDialog } from "./MarketplaceBrowseDialog";
 
 const CARD_BANNER_ASPECT = 300 / 140;
 
@@ -28,14 +29,6 @@ const FRAME_OPTIONS: { value: string; label: string; hudType?: string; hudColor?
   { value: 'hud-command-gold',  label: 'Cmd Gold',   hudType: 'command', hudColor: '#ffaa00' },
 ];
 
-function HudFrame({ tier }: { tier: string }) {
-  if (tier === 'hud-grid-blue')    return <HudGridSvg    color="#00aaff" glow="rgba(0,170,255,0.6)"/>;
-  if (tier === 'hud-grid-purple')  return <HudGridSvg    color="#aa55ff" glow="rgba(170,85,255,0.6)"/>;
-  if (tier === 'hud-grid-gold')    return <HudGridSvg    color="#ffaa00" glow="rgba(255,170,0,0.6)"/>;
-  if (tier === 'hud-command-blue') return <HudCommandSvg color="#00aaff" glow="rgba(0,170,255,0.5)"/>;
-  if (tier === 'hud-command-gold') return <HudCommandSvg color="#ffaa00" glow="rgba(255,170,0,0.5)"/>;
-  return null;
-}
 
 interface Props {
   open: boolean;
@@ -62,7 +55,9 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
   const [bannerUploading, setBannerUploading] = useState(false);
   const [frameCosts, setFrameCosts] = useState<Record<string, number>>({});
   const [customFrames, setCustomFrames] = useState<{ id: string; name: string; config: CustomFrameConfig }[]>([]);
+  const [ownedMarketplaceFrames, setOwnedMarketplaceFrames] = useState<{ listingId: string; name: string; frameConfig: CustomFrameConfig }[]>([]);
   const [designerOpen, setDesignerOpen] = useState(false);
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
 
   const cropContainerRef = useRef<HTMLDivElement>(null);
   const cropImageRef = useRef<HTMLImageElement>(null);
@@ -80,6 +75,9 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
     customFetch<Record<string, number>>("/api/frame-costs").then(setFrameCosts).catch(() => {});
     customFetch<{ frames: { id: string; name: string; config: CustomFrameConfig }[] }>("/api/frame-templates")
       .then((d: { frames: { id: string; name: string; config: CustomFrameConfig }[] }) => setCustomFrames(d.frames ?? []))
+      .catch(() => {});
+    customFetch<{ purchases: { listingId: string; name: string; frameConfig: CustomFrameConfig }[] }>("/api/marketplace/my-workspace-frames")
+      .then((d: { purchases: { listingId: string; name: string; frameConfig: CustomFrameConfig }[] }) => setOwnedMarketplaceFrames(d.purchases ?? []))
       .catch(() => {});
   }, [open, batch]);
 
@@ -238,7 +236,11 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
     onOpenChange(o);
   };
 
-  const frameCostKey = (tier: string) => tier.startsWith('custom:') ? 'custom' : tier;
+  const frameCostKey = (tier: string): string | null => {
+    if (tier.startsWith('marketplace:')) return null;
+    if (tier.startsWith('custom:')) return 'custom';
+    return tier;
+  };
 
   // Build preview card JSX (shared between framed and plain variants)
   const tc = bannerTextColor;
@@ -292,9 +294,12 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
 
   const isHudFrame = frameTier.startsWith('hud-');
   const isCustomFrame = frameTier.startsWith('custom:');
+  const isMarketplaceFrame = frameTier.startsWith('marketplace:');
   const customFrameConfig = isCustomFrame
     ? customFrames.find((cf) => `custom:${cf.id}` === frameTier)?.config ?? null
-    : null;
+    : isMarketplaceFrame
+      ? ownedMarketplaceFrames.find(f => `marketplace:${f.listingId}` === frameTier)?.frameConfig ?? null
+      : null;
 
   return (
     <>
@@ -440,8 +445,9 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
             {/* Frame style picker */}
             {(() => {
               const paidFrames: string[] = batch?.paidFrames ?? [];
-              const isPaidFrame = frameTier !== 'none' && !paidFrames.includes(frameTier);
-              const frameCost = isPaidFrame ? (frameCosts[frameCostKey(frameTier)] ?? 0) : 0;
+              const costKey = frameCostKey(frameTier);
+              const isPaidFrame = frameTier !== 'none' && costKey !== null && !paidFrames.includes(frameTier);
+              const frameCost = isPaidFrame && costKey ? (frameCosts[costKey] ?? 0) : 0;
               const canAfford = walletBalance >= frameCost;
               return (
                 <div className="space-y-2 shrink-0">
@@ -524,9 +530,13 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
                         <button key={tier} type="button" onClick={() => setFrameTier(tier)}
                           className={`shrink-0 flex flex-col items-center gap-1 p-1 rounded transition-opacity ${selected ? 'ring-2 ring-foreground opacity-100' : 'opacity-60 hover:opacity-90'}`}>
                           <div className="relative" style={{ width: 40, height: 54 }}>
-                            <CustomFrameRenderer frameId={cf.id} config={cf.config}>
-                              <div style={{ width: 40, height: 54, background: 'var(--background)' }} />
-                            </CustomFrameRenderer>
+                            {cf.config ? (
+                              <CustomFrameRenderer frameId={cf.id} config={cf.config}>
+                                <div style={{ width: 40, height: 54, background: 'var(--background)' }} />
+                              </CustomFrameRenderer>
+                            ) : (
+                              <div style={{ width: 40, height: 54, background: 'var(--background)', border: '1px solid var(--border)' }} />
+                            )}
                             {selected && (
                               <div className="absolute -top-1 -right-1 bg-foreground text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">
                                 <Check className="w-2 h-2" />
@@ -546,6 +556,34 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
                         </button>
                       );
                     })}
+                    {/* Owned marketplace frames */}
+                    {ownedMarketplaceFrames.map((mf) => {
+                      const tier = `marketplace:${mf.listingId}`;
+                      const selected = frameTier === tier;
+                      return (
+                        <button key={tier} type="button" onClick={() => setFrameTier(tier)}
+                          className={`shrink-0 flex flex-col items-center gap-1 p-1 rounded transition-opacity ${selected ? 'ring-2 ring-foreground opacity-100' : 'opacity-60 hover:opacity-90'}`}>
+                          <div className="relative" style={{ width: 40, height: 54 }}>
+                            {mf.frameConfig ? (
+                              <CustomFrameRenderer frameId={mf.listingId} config={mf.frameConfig}>
+                                <div style={{ width: 40, height: 54, background: 'var(--background)' }} />
+                              </CustomFrameRenderer>
+                            ) : (
+                              <div style={{ width: 40, height: 54, background: 'var(--background)', border: '1px solid var(--border)' }} />
+                            )}
+                            {selected && (
+                              <div className="absolute -top-1 -right-1 bg-foreground text-background rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                                <Check className="w-2 h-2" />
+                              </div>
+                            )}
+                            <div className="absolute -bottom-1 left-0 right-0 flex justify-center">
+                              <span className="text-[7px] font-bold bg-green-600 text-white px-1 leading-tight">owned</span>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-medium text-center leading-tight truncate max-w-[40px]">{mf.name}</span>
+                        </button>
+                      );
+                    })}
                     {/* Design new frame button */}
                     <button type="button" onClick={() => setDesignerOpen(true)}
                       className="shrink-0 flex flex-col items-center gap-1 p-1 rounded opacity-60 hover:opacity-90 transition-opacity">
@@ -553,6 +591,14 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
                         <Plus className="w-4 h-4" />
                       </div>
                       <span className="text-[9px] font-medium text-center leading-tight">New</span>
+                    </button>
+                    {/* Browse marketplace button */}
+                    <button type="button" onClick={() => setMarketplaceOpen(true)}
+                      className="shrink-0 flex flex-col items-center gap-1 p-1 rounded opacity-60 hover:opacity-90 transition-opacity">
+                      <div className="relative flex items-center justify-center border-2 border-dashed border-foreground/40 rounded" style={{ width: 40, height: 54 }}>
+                        <ShoppingBag className="w-4 h-4" />
+                      </div>
+                      <span className="text-[9px] font-medium text-center leading-tight">Browse</span>
                     </button>
                   </div>
                   {isPaidFrame && (
@@ -574,13 +620,13 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
             {/* Live card preview */}
             <div className="space-y-2 shrink-0">
               <p className="text-sm font-medium">Preview</p>
-              {isCustomFrame && customFrameConfig ? (
-                <CustomFrameRenderer frameId={frameTier.slice(7)} config={customFrameConfig}>
+              {(isCustomFrame || isMarketplaceFrame) && customFrameConfig ? (
+                <CustomFrameRenderer frameId={isCustomFrame ? frameTier.slice(7) : frameTier.slice(12)} config={customFrameConfig}>
                   {previewCardInner}
                 </CustomFrameRenderer>
               ) : frameTier !== 'none' ? (
                 <div className={`cert-frame-wrapper frame-${frameTier}`} style={{ position: 'relative' }}>
-                  {isHudFrame && <HudFrame tier={frameTier} />}
+                  {isHudFrame && <HudFrameByTier tier={frameTier} />}
                   {previewCardInner}
                 </div>
               ) : previewCardInner}
@@ -593,8 +639,9 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {(() => {
             const paidFrames: string[] = batch?.paidFrames ?? [];
-            const isPaidFrame = frameTier !== 'none' && !paidFrames.includes(frameTier);
-            const frameCost = isPaidFrame ? (frameCosts[frameCostKey(frameTier)] ?? 0) : 0;
+            const costKey2 = frameCostKey(frameTier);
+            const isPaidFrame = frameTier !== 'none' && costKey2 !== null && !paidFrames.includes(frameTier);
+            const frameCost = isPaidFrame && costKey2 ? (frameCosts[costKey2] ?? 0) : 0;
             const canAfford = walletBalance >= frameCost;
             return (
               <Button onClick={handleConfirm} disabled={bannerUploading || (isPaidFrame && !canAfford)}>
@@ -617,6 +664,18 @@ export function BatchBannerEditor({ open, onOpenChange, batchId, batch, walletBa
         });
         setFrameTier(tier);
         setDesignerOpen(false);
+      }}
+    />
+    <MarketplaceBrowseDialog
+      open={marketplaceOpen}
+      onOpenChange={setMarketplaceOpen}
+      onFrameSelected={(tier, name, config) => {
+        const listingId = tier.slice(12);
+        setOwnedMarketplaceFrames(prev => {
+          if (prev.some(f => f.listingId === listingId)) return prev;
+          return [...prev, { listingId, name, frameConfig: config }];
+        });
+        setFrameTier(tier);
       }}
     />
     </>

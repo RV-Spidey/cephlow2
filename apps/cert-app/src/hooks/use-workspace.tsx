@@ -7,6 +7,7 @@ export interface Workspace {
   name: string;
   ownerId: string;
   currentBalance: number;
+  transferCode?: string;
   createdAt: string;
   role: "owner" | "admin" | "member";
 }

@@ -231,6 +231,17 @@ function CssFrame({ config, frameId, children }: { config: CssFrameConfig; frame
   );
 }
 
+// ─── Tier-string helper (shared across editor, banner, student profile) ───────
+
+export function HudFrameByTier({ tier }: { tier: string }) {
+  if (tier === "hud-grid-blue")    return <HudGridSvg    color="#00aaff" glow="rgba(0,170,255,0.6)" />;
+  if (tier === "hud-grid-purple")  return <HudGridSvg    color="#aa55ff" glow="rgba(170,85,255,0.6)" />;
+  if (tier === "hud-grid-gold")    return <HudGridSvg    color="#ffaa00" glow="rgba(255,170,0,0.6)" />;
+  if (tier === "hud-command-blue") return <HudCommandSvg color="#00aaff" glow="rgba(0,170,255,0.5)" />;
+  if (tier === "hud-command-gold") return <HudCommandSvg color="#ffaa00" glow="rgba(255,170,0,0.5)" />;
+  return null;
+}
+
 // ─── Public component ─────────────────────────────────────────────────────────
 
 interface CustomFrameRendererProps {

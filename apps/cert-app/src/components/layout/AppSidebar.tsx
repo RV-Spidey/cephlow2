@@ -19,6 +19,7 @@ import {
   MailOpen,
   Network,
   Settings,
+  LayoutTemplate,
 } from "lucide-react";
 import {
   Sidebar,
@@ -79,6 +80,7 @@ const ADVANCED_NAV_ITEMS = [
 
 // Visible to all users, never locked
 const WORKSPACE_PUBLIC_ITEMS = [
+  { title: "Frame Inventory", url: "/frames", icon: LayoutTemplate },
   { title: "Invitations", url: "/workspace/invitations", icon: MailOpen },
 ];
 

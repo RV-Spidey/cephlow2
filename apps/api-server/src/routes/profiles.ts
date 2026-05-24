@@ -60,12 +60,33 @@ router.get("/p/:username", async (req, res) => {
       }
     }
 
+    // Fetch configs for marketplace frames (via frame_listings → custom_frames)
+    const marketplaceListingIds = [...new Set(
+      Object.values(bannerByBatchId)
+        .map(b => b.frame_tier)
+        .filter(t => t?.startsWith("marketplace:"))
+        .map(t => t.slice(12))
+    )];
+    const marketplaceFrameConfigById: Record<string, any> = {};
+    if (marketplaceListingIds.length > 0) {
+      const { data: mlRows } = await supabaseAdmin
+        .from("frame_listings")
+        .select("id, custom_frames!inner(config)")
+        .in("id", marketplaceListingIds);
+      for (const row of mlRows || []) {
+        marketplaceFrameConfigById[row.id] = (row as any).custom_frames?.config ?? null;
+      }
+    }
+
     const certificates = (certsData || []).map((row) => {
       const batchMeta = bannerByBatchId[row.batch_id];
       const frameTier = batchMeta?.frame_tier ?? 'none';
-      const customFrameConfig = frameTier.startsWith("custom:")
-        ? (customFrameConfigById[frameTier.slice(7)] ?? null)
-        : null;
+      let customFrameConfig = null;
+      if (frameTier.startsWith("custom:")) {
+        customFrameConfig = customFrameConfigById[frameTier.slice(7)] ?? null;
+      } else if (frameTier.startsWith("marketplace:")) {
+        customFrameConfig = marketplaceFrameConfigById[frameTier.slice(12)] ?? null;
+      }
       return {
         certId: row.cert_id,
         batchId: row.batch_id,

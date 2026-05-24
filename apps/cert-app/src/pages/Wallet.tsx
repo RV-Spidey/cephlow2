@@ -1,45 +1,360 @@
-import { useState } from "react";
-import { Wallet as WalletIcon, IndianRupee, History, Plus, Loader2, FileBadge, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Wallet as WalletIcon, IndianRupee, History, Plus, Loader2,
+  FileBadge, Users, Coins, ArrowRightLeft, Copy, Check, ArrowUpRight, ArrowDownLeft,
+} from "lucide-react";
+import { Link } from "wouter";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// @ts-ignore
+// @ts-expect-error — cashfree-js ships no type declarations
 import { load } from "@cashfreepayments/cashfree-js";
 import {
-  useGetWalletBalance,
-  useGetWalletHistory,
-  useCreateOrder,
-  customFetch,
+  useGetWalletBalance, useGetWalletHistory, useCreateOrder, customFetch,
 } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspace } from "@/hooks/use-workspace";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Transfer {
+  id: string;
+  direction: "in" | "out";
+  amount: number;
+  note: string;
+  fromWorkspace: { name: string; code: string };
+  toWorkspace:   { name: string; code: string };
+  createdAt: string;
+}
+
+interface ResolvedWorkspace { id: string; name: string; code: string }
+
+// ─── Send Credits dialog ──────────────────────────────────────────────────────
+
+function SendCreditsDialog({ onSent }: { onSent: () => void }) {
+  const { toast } = useToast();
+  const [open, setOpen]           = useState(false);
+  const [code, setCode]           = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [resolved, setResolved]   = useState<ResolvedWorkspace | null>(null);
+  const [resolveErr, setResolveErr] = useState("");
+  const [amount, setAmount]       = useState("");
+  const [note, setNote]           = useState("");
+  const [sending, setSending]     = useState(false);
+
+  const reset = () => {
+    setCode(""); setResolved(null); setResolveErr("");
+    setAmount(""); setNote(""); setSending(false); setResolving(false);
+  };
+
+  const handleOpenChange = (v: boolean) => { setOpen(v); if (!v) reset(); };
+
+  const lookupCode = useCallback(async (raw: string) => {
+    const c = raw.trim().toUpperCase();
+    if (c.length < 8) { setResolved(null); setResolveErr(""); return; }
+    setResolving(true); setResolveErr(""); setResolved(null);
+    try {
+      const data = await customFetch<ResolvedWorkspace>(`/api/wallet/resolve?code=${c}`);
+      setResolved(data);
+    } catch (err: any) {
+      setResolveErr(err?.message ?? "Workspace not found");
+    } finally {
+      setResolving(false);
+    }
+  }, []);
+
+  const handleSend = async () => {
+    const amt = Number(amount);
+    if (!resolved || isNaN(amt) || amt <= 0 || amt !== Math.floor(amt)) return;
+    setSending(true);
+    try {
+      await customFetch("/api/wallet/send", {
+        method: "POST",
+        body: JSON.stringify({ toCode: resolved.code, amount: amt, note: note.trim() }),
+      });
+      toast({ title: `₹${amt} sent to ${resolved.name}` });
+      setOpen(false);
+      reset();
+      onSent();
+    } catch (err: any) {
+      toast({ title: "Transfer failed", description: err?.message, variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="font-bold uppercase tracking-widest text-xs h-10 gap-2 border-2">
+          <ArrowRightLeft className="w-3.5 h-3.5" />
+          Send Credits
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md border-2 border-foreground">
+        <DialogHeader>
+          <DialogTitle className="uppercase tracking-widest">Send Credits</DialogTitle>
+          <DialogDescription className="normal-case tracking-normal font-normal">
+            Transfer balance to any workspace using their transfer code.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          {/* Recipient code */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest">Recipient Transfer Code</label>
+            <div className="flex gap-2">
+              <Input
+                className="font-mono uppercase tracking-widest border-2"
+                placeholder="e.g. A1B2C3D4"
+                maxLength={8}
+                value={code}
+                onChange={e => {
+                  const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+                  setCode(v);
+                  if (v.length === 8) lookupCode(v);
+                  else { setResolved(null); setResolveErr(""); }
+                }}
+              />
+            </div>
+            {resolving && <p className="text-[10px] text-muted-foreground">Looking up…</p>}
+            {resolved && (
+              <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">
+                ✓ {resolved.name}
+              </p>
+            )}
+            {resolveErr && (
+              <p className="text-[10px] text-destructive uppercase tracking-widest">{resolveErr}</p>
+            )}
+          </div>
+
+          {/* Amount */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest">Amount (₹)</label>
+            <Input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 100"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="font-mono border-2 text-lg"
+              disabled={!resolved}
+            />
+            <div className="flex gap-2 mt-1">
+              {[50, 100, 500].map(a => (
+                <Button
+                  key={a} size="sm" variant="outline"
+                  className="border-2 font-bold text-[10px] uppercase tracking-widest h-7"
+                  disabled={!resolved}
+                  onClick={() => setAmount(String(a))}
+                >
+                  ₹{a}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Note */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest">Note (optional)</label>
+            <Input
+              placeholder="e.g. For Q3 certificates"
+              maxLength={200}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              className="border-2 normal-case"
+              disabled={!resolved}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pb-2">
+          <Button variant="ghost" onClick={() => setOpen(false)} className="uppercase tracking-widest text-xs font-bold">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSend}
+            disabled={!resolved || !amount || Number(amount) <= 0 || sending}
+            className="uppercase tracking-widest text-xs font-bold border-2"
+          >
+            {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Send ₹{amount || "—"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Transfer code display with copy button ───────────────────────────────────
+
+function TransferCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors group"
+      title="Copy transfer code"
+    >
+      <span className="border border-border px-1.5 py-0.5 group-hover:border-foreground transition-colors">{code}</span>
+      {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
+
+// ─── Transfer history section ─────────────────────────────────────────────────
+
+function TransferHistory({ workspaceId }: { workspaceId: string }) {
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [total, setTotal]         = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [page, setPage]           = useState(1);
+  const limit = 10;
+
+  const load = useCallback(async (p = 1) => {
+    setLoading(true);
+    try {
+      const d = await customFetch<{ transfers: Transfer[]; total: number }>(
+        `/api/wallet/transfers?page=${p}&limit=${limit}`
+      );
+      setTransfers(d.transfers ?? []);
+      setTotal(d.total ?? 0);
+      setPage(p);
+    } catch {
+      // silent — not critical
+    } finally {
+      setLoading(false);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => { load(1); }, [load]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return (
+    <div className="border-2 border-foreground">
+      <div className="border-b-2 border-foreground px-5 py-3 flex items-center gap-2 bg-muted">
+        <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
+        <span className="text-[10px] font-bold uppercase tracking-widest">Credit Transfers</span>
+      </div>
+
+      {loading ? (
+        <div className="h-24 flex items-center justify-center text-xs uppercase tracking-widest text-muted-foreground">
+          Loading…
+        </div>
+      ) : transfers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <ArrowRightLeft className="w-8 h-8 text-muted-foreground opacity-20 mb-3" />
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">No transfers yet</p>
+          <p className="text-xs text-muted-foreground mt-1 normal-case tracking-normal font-normal">
+            Send credits to other workspaces or receive them here.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b-2 border-foreground bg-muted">
+                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest">Date</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest">From → To</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest">Note</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-widest">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfers.map(t => (
+                  <tr key={t.id} className="border-b border-foreground/10 hover:bg-muted transition-colors">
+                    <td className="px-4 py-3 text-muted-foreground font-mono whitespace-nowrap">
+                      {format(new Date(t.createdAt), "dd MMM yyyy, HH:mm")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        {t.direction === "out"
+                          ? <ArrowUpRight className="w-3 h-3 text-red-500 shrink-0" />
+                          : <ArrowDownLeft className="w-3 h-3 text-green-600 shrink-0" />}
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {t.fromWorkspace.name} → {t.toWorkspace.name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground normal-case tracking-normal font-normal max-w-[180px] truncate">
+                      {t.note || "—"}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${
+                      t.direction === "in" ? "text-green-600" : "text-red-500"
+                    }`}>
+                      {t.direction === "in" ? "+" : "-"}₹{t.amount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 py-3 border-t border-foreground/10">
+              <button
+                disabled={page === 1}
+                onClick={() => load(page - 1)}
+                className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                ← Prev
+              </button>
+              <span className="text-[10px] font-mono text-muted-foreground">{page} / {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => load(page + 1)}
+                className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function Wallet() {
-  const { activeWorkspace, workspaces, role } = useWorkspace();
+  const { activeWorkspace, workspaces, role, reload } = useWorkspace();
   const isAdmin = role === "owner" || role === "admin";
   const memberCount = activeWorkspace
     ? workspaces.find((w) => w.id === activeWorkspace.id) ? workspaces.length : 1
     : 1;
+
   const { data: balanceData, isLoading: isLoadingBalance, refetch: refetchBalance } = useGetWalletBalance();
   const { data: historyData, isLoading: isLoadingHistory, refetch: refetchHistory } = useGetWalletHistory();
   const { mutateAsync: createOrder } = useCreateOrder() as any;
   const { toast } = useToast();
 
-  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState<string>("500");
+  const [isTopUpOpen, setIsTopUpOpen]           = useState(false);
+  const [topUpAmount, setTopUpAmount]           = useState<string>("500");
   const [isProcessingTopUp, setIsProcessingTopUp] = useState(false);
+  const [creatorCredits, setCreatorCredits]     = useState<number | null>(null);
+  const [transferKey, setTransferKey]           = useState(0);
 
-  const currentBalance = balanceData?.currentBalance ?? 0;
-  const ledgerHistory = historyData?.ledgers || [];
-  const RATE = Number(import.meta.env.VITE_CERT_GENERATION_RATE || 1);
+  useEffect(() => {
+    customFetch<{ creatorCredits: number }>("/api/creator/credits")
+      .then((d) => setCreatorCredits(d.creatorCredits ?? 0))
+      .catch(() => {});
+  }, []);
+
+  const currentBalance  = balanceData?.currentBalance ?? 0;
+  const transferCode    = (balanceData as any)?.transferCode as string | null ?? null;
+  const ledgerHistory   = historyData?.ledgers || [];
+  const RATE            = Number(import.meta.env.VITE_CERT_GENERATION_RATE || 1);
   const generationLimit = Math.floor(currentBalance / RATE);
 
   const handleTopUp = async () => {
@@ -51,16 +366,10 @@ export default function Wallet() {
       const cashfree = await load({ mode: import.meta.env.VITE_CASHFREE_ENV === "PRODUCTION" ? "production" : "sandbox" });
       await cashfree.checkout({ paymentSessionId: payment_session_id, redirectTarget: "_modal" });
       setIsTopUpOpen(false);
-
-      // After the modal closes, verify payment server-side and credit wallet
       try {
         const result = await customFetch<{ status: string; credited: boolean; amount?: number }>(
           `/api/payments/verify`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ order_id }),
-          },
+          { method: "POST", body: JSON.stringify({ order_id }) }
         );
         if (result.credited) {
           toast({ title: "Payment successful", description: `₹${result.amount} added to wallet.` });
@@ -70,8 +379,7 @@ export default function Wallet() {
           toast({ title: "Payment pending", description: "If you completed payment, your balance will update shortly.", variant: "destructive" });
         }
       } catch {
-        // Verification call failed — fall back to refetch after delay
-        toast({ title: "Verifying payment...", description: "Your balance will update shortly." });
+        toast({ title: "Verifying payment…", description: "Your balance will update shortly." });
       }
       setTimeout(() => { refetchBalance(); refetchHistory(); }, 1500);
     } catch (error: any) {
@@ -81,6 +389,12 @@ export default function Wallet() {
     }
   };
 
+  const handleSent = () => {
+    refetchBalance();
+    refetchHistory();
+    reload();
+    setTransferKey(k => k + 1);
+  };
 
   return (
     <div className="space-y-8">
@@ -91,47 +405,55 @@ export default function Wallet() {
           <h1 className="text-2xl font-display font-black">Prepaid Wallet</h1>
           <p className="text-xs text-muted-foreground mt-1 normal-case tracking-normal font-normal">Manage credits for certificate generation.</p>
           {activeWorkspace && (
-            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1 uppercase tracking-widest">
-              <Users className="w-3 h-3" />
-              Shared with {memberCount} member{memberCount !== 1 ? "s" : ""} · {activeWorkspace.name}
-            </p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1 uppercase tracking-widest">
+                <Users className="w-3 h-3" />
+                Shared with {memberCount} member{memberCount !== 1 ? "s" : ""} · {activeWorkspace.name}
+              </p>
+              {transferCode && (
+                <TransferCode code={transferCode} />
+              )}
+            </div>
           )}
         </div>
         {isAdmin && (
-        <Dialog open={isTopUpOpen} onOpenChange={setIsTopUpOpen}>
-          <DialogTrigger asChild>
-            <Button className="font-bold uppercase tracking-widest text-xs h-10 gap-2 border-2">
-              <Plus className="w-3.5 h-3.5" />
-              Add Credits
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md border-2 border-foreground">
-            <DialogHeader>
-              <DialogTitle className="uppercase tracking-widest">Top-up Wallet</DialogTitle>
-              <DialogDescription className="normal-case tracking-normal font-normal">Add funds securely via Cashfree.</DialogDescription>
-            </DialogHeader>
-            <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest">Amount (INR)</label>
-                <Input type="number" placeholder="e.g. 500" value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} min="1" className="text-lg font-mono border-2" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[100, 500, 1000].map((amt) => (
-                  <Button key={amt} variant="outline" type="button" onClick={() => setTopUpAmount(amt.toString())} className="border-2 font-bold uppercase tracking-widest text-xs">
-                    ₹{amt}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SendCreditsDialog onSent={handleSent} />
+            <Dialog open={isTopUpOpen} onOpenChange={setIsTopUpOpen}>
+              <DialogTrigger asChild>
+                <Button className="font-bold uppercase tracking-widest text-xs h-10 gap-2 border-2">
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Credits
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md border-2 border-foreground">
+                <DialogHeader>
+                  <DialogTitle className="uppercase tracking-widest">Top-up Wallet</DialogTitle>
+                  <DialogDescription className="normal-case tracking-normal font-normal">Add funds securely via Cashfree.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest">Amount (INR)</label>
+                    <Input type="number" placeholder="e.g. 500" value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} min="1" className="text-lg font-mono border-2" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[100, 500, 1000].map((amt) => (
+                      <Button key={amt} variant="outline" type="button" onClick={() => setTopUpAmount(amt.toString())} className="border-2 font-bold uppercase tracking-widest text-xs">
+                        ₹{amt}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pb-2">
+                  <Button variant="ghost" onClick={() => setIsTopUpOpen(false)} className="uppercase tracking-widest text-xs font-bold">Cancel</Button>
+                  <Button onClick={handleTopUp} disabled={isProcessingTopUp} className="uppercase tracking-widest text-xs font-bold border-2">
+                    {isProcessingTopUp && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Proceed to Pay
                   </Button>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pb-2">
-              <Button variant="ghost" onClick={() => setIsTopUpOpen(false)} className="uppercase tracking-widest text-xs font-bold">Cancel</Button>
-              <Button onClick={handleTopUp} disabled={isProcessingTopUp} className="uppercase tracking-widest text-xs font-bold border-2">
-                {isProcessingTopUp && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Proceed to Pay
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
       </div>
 
@@ -165,7 +487,6 @@ export default function Wallet() {
           <History className="w-4 h-4 text-muted-foreground" />
           <span className="text-[10px] font-bold uppercase tracking-widest">Transaction History</span>
         </div>
-
         {isLoadingHistory ? (
           <div className="h-32 flex items-center justify-center text-xs uppercase tracking-widest text-muted-foreground">Loading...</div>
         ) : ledgerHistory.length === 0 ? (
@@ -203,15 +524,17 @@ export default function Wallet() {
                     )}
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${
-                        ledger.type === 'topup'
-                          ? 'border-foreground bg-foreground text-background'
-                          : 'border-foreground bg-background text-foreground'
+                        ledger.type === "topup" || ledger.type === "transfer_in"
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-foreground bg-background text-foreground"
                       }`}>
-                        {ledger.type.replace('_', ' ')}
+                        {ledger.type.replace(/_/g, " ")}
                       </span>
                     </td>
-                    <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${ledger.type === 'topup' ? '' : 'text-muted-foreground'}`}>
-                      {ledger.amount > 0 ? '+' : '-'}₹{Math.abs(ledger.amount).toFixed(2)}
+                    <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${
+                      ledger.amount > 0 ? "" : "text-muted-foreground"
+                    }`}>
+                      {ledger.amount > 0 ? "+" : "-"}₹{Math.abs(ledger.amount).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground font-mono">
                       ₹{ledger.balanceAfter.toFixed(2)}
@@ -223,6 +546,27 @@ export default function Wallet() {
           </div>
         )}
       </div>
+
+      {/* Credit transfers (blockchain-style) */}
+      {activeWorkspace && (
+        <TransferHistory key={transferKey} workspaceId={activeWorkspace.id} />
+      )}
+
+      {/* Creator credits banner */}
+      {creatorCredits !== null && (
+        <div className="border-2 border-foreground flex items-center justify-between px-5 py-4">
+          <div className="flex items-center gap-3">
+            <Coins className="w-4 h-4 text-muted-foreground" />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Creator Credits</p>
+              <p className="text-xl font-display font-black font-mono">₹{creatorCredits.toFixed(2)}</p>
+            </div>
+          </div>
+          <Link href="/frames#credits" className="text-[10px] font-bold uppercase tracking-widest underline underline-offset-2">
+            Transfer to workspace →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

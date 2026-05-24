@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { Award, CalendarDays, Check, ExternalLink, Loader2, Pencil, ShieldCheck, User, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { HudGridSvg, HudCommandSvg, CustomFrameRenderer, type CustomFrameConfig } from "@/components/CustomFrameRenderer";
+import { HudFrameByTier, CustomFrameRenderer, type CustomFrameConfig } from "@/components/CustomFrameRenderer";
 
 interface ProfileCert {
   certId: string;
@@ -32,14 +32,6 @@ interface ProfileData {
   certificates: ProfileCert[];
 }
 
-function HudFrame({ tier }: { tier: string }) {
-  if (tier === 'hud-grid-blue')    return <HudGridSvg    color="#00aaff" glow="rgba(0,170,255,0.6)"/>;
-  if (tier === 'hud-grid-purple')  return <HudGridSvg    color="#aa55ff" glow="rgba(170,85,255,0.6)"/>;
-  if (tier === 'hud-grid-gold')    return <HudGridSvg    color="#ffaa00" glow="rgba(255,170,0,0.6)"/>;
-  if (tier === 'hud-command-blue') return <HudCommandSvg color="#00aaff" glow="rgba(0,170,255,0.5)"/>;
-  if (tier === 'hud-command-gold') return <HudCommandSvg color="#ffaa00" glow="rgba(255,170,0,0.5)"/>;
-  return null;
-}
 
 export default function StudentProfile() {
   const [, params] = useRoute("/:username");
@@ -246,7 +238,7 @@ export default function StudentProfile() {
           <div className="px-5 py-3 flex items-center gap-2 border-t-2 border-foreground">
             <Award className="h-3.5 w-3.5 shrink-0" />
             <span className="text-[11px] font-bold uppercase tracking-widest">
-              {profile.certificates.length} {profile.certificates.length === 1 ? "Certificate" : "Certificates"} Issued
+              {profile.certificates.length} {profile.certificates.length === 1 ? "Certificate" : "Certificates"} Received
             </span>
           </div>
         </div>
@@ -355,7 +347,7 @@ export default function StudentProfile() {
                 if (frameWrapClass) {
                   return (
                     <div key={cert.certId} className={frameWrapClass}>
-                      {isHud && <HudFrame tier={tier} />}
+                      {isHud && <HudFrameByTier tier={tier} />}
                       {cardInner}
                     </div>
                   );

@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Trash2, ChevronDown, ChevronRight, Share2 } from "lucide-react";
 import {
   CustomFrameConfig,
   GradientFrameConfig,
@@ -338,6 +338,8 @@ function CssTab({ config, onChange }: { config: CssFrameConfig; onChange: (c: Cs
   );
 }
 
+import { PublishFrameDialog } from "./PublishFrameDialog";
+
 // ─── Main designer dialog ──────────────────────────────────────────────────────
 
 interface Props {
@@ -345,6 +347,7 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   batch?: any;
   onSaved: (frameTier: string, frameLabel: string, config: CustomFrameConfig) => void;
+  standalone?: boolean;
 }
 
 const DEFAULT_GRADIENT: GradientFrameConfig = {
@@ -358,7 +361,7 @@ const DEFAULT_CSS: CssFrameConfig = { type: "css", css: CSS_STARTER };
 
 type Tab = "gradient" | "hud" | "css";
 
-export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved }: Props) {
+export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved, standalone }: Props) {
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>("gradient");
   const [name, setName] = useState("My Frame");
@@ -366,6 +369,9 @@ export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved }: Prop
   const [hud, setHud] = useState<HudFrameConfig>(DEFAULT_HUD);
   const [css, setCss] = useState<CssFrameConfig>(DEFAULT_CSS);
   const [saving, setSaving] = useState(false);
+  const [savedFrameId, setSavedFrameId] = useState<string | null>(null);
+  const [savedFrameName, setSavedFrameName] = useState<string>("");
+  const [publishOpen, setPublishOpen] = useState(false);
 
   const activeConfig: CustomFrameConfig =
     tab === "gradient" ? gradient : tab === "hud" ? hud : css;
@@ -385,9 +391,10 @@ export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved }: Prop
         method: "POST",
         body: JSON.stringify({ name: name.trim(), config: activeConfig }),
       });
+      setSavedFrameId(result.id);
+      setSavedFrameName(result.name);
       onSaved(`custom:${result.id}`, result.name, activeConfig);
       toast({ title: `"${result.name}" saved to workspace library` });
-      onOpenChange(false);
     } catch (err: any) {
       toast({ title: "Failed to save frame", description: err.message, variant: "destructive" });
     } finally {
@@ -401,7 +408,101 @@ export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved }: Prop
     { id: "css", label: "Custom CSS" },
   ];
 
+  const designerBody = (
+    <>
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+        {/* Left: controls */}
+        <div className="flex flex-col gap-4 flex-1">
+          {/* Name */}
+          <div className="space-y-1.5 shrink-0">
+            <p className="text-xs font-bold uppercase tracking-widest">Frame name</p>
+            <input
+              className="w-full border-2 border-border bg-background px-3 py-1.5 text-sm font-bold uppercase tracking-widest outline-none focus:border-foreground transition-colors"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="My Frame"
+            />
+          </div>
+
+          {/* Tab bar */}
+          <div className="shrink-0 flex border-2 border-border">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors
+                  ${tab === t.id ? "bg-foreground text-background" : "hover:bg-muted"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1">
+            {tab === "gradient" && <GradientTab config={gradient} onChange={setGradient} />}
+            {tab === "hud" && <HudTab config={hud} onChange={setHud} />}
+            {tab === "css" && <CssTab config={css} onChange={setCss} />}
+          </div>
+        </div>
+
+        {/* Right: live preview */}
+        <div className="flex flex-col gap-3 w-full lg:w-56 lg:shrink-0">
+          <p className="text-sm font-medium shrink-0">Live preview</p>
+          <div className="shrink-0">
+            <CustomFrameRenderer frameId={previewId} config={activeConfig}>
+              <PreviewCard />
+            </CustomFrameRenderer>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Updates instantly as you edit.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-between gap-2 pt-4 border-t border-border mt-4">
+        <div>
+          {savedFrameId && (
+            <Button variant="outline" onClick={() => setPublishOpen(true)}>
+              <Share2 className="w-4 h-4 mr-2" />
+              Publish to Marketplace
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {standalone ? "Close" : "Cancel"}
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {saving ? "Saving…" : "Save to Library"}
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+
+  if (standalone) {
+    if (!open) return null;
+    return (
+      <>
+        <div className="border-2 border-foreground p-4 sm:p-6">
+          <div className="flex items-center gap-2 pb-4 mb-4 border-b border-border">
+            <p className="text-xs font-black uppercase tracking-widest flex-1">Frame Designer</p>
+          </div>
+          {designerBody}
+        </div>
+
+        {savedFrameId && (
+          <PublishFrameDialog
+            open={publishOpen}
+            onOpenChange={setPublishOpen}
+            frameId={savedFrameId}
+            frameName={savedFrameName}
+            frameConfig={activeConfig}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-3xl max-h-[95vh] flex flex-col p-4 sm:p-6 gap-0 overflow-hidden">
         <DialogHeader className="shrink-0 pb-4">
@@ -410,62 +511,21 @@ export function CustomFrameDesigner({ open, onOpenChange, batch, onSaved }: Prop
             Design a custom frame and save it to your workspace library for reuse across batches.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="flex flex-col lg:flex-row flex-1 gap-4 lg:gap-6 min-h-0 overflow-y-auto lg:overflow-hidden">
-
-          {/* Left: controls */}
-          <div className="flex flex-col gap-4 flex-1 min-h-0 lg:overflow-y-auto themed-scroll">
-
-            {/* Name */}
-            <div className="space-y-1.5 shrink-0">
-              <p className="text-xs font-bold uppercase tracking-widest">Frame name</p>
-              <input
-                className="w-full border-2 border-border bg-background px-3 py-1.5 text-sm font-bold uppercase tracking-widest outline-none focus:border-foreground transition-colors"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="My Frame"
-              />
-            </div>
-
-            {/* Tab bar */}
-            <div className="shrink-0 flex border-2 border-border">
-              {tabs.map(t => (
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors
-                    ${tab === t.id ? "bg-foreground text-background" : "hover:bg-muted"}`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab content */}
-            <div className="flex-1">
-              {tab === "gradient" && <GradientTab config={gradient} onChange={setGradient} />}
-              {tab === "hud" && <HudTab config={hud} onChange={setHud} />}
-              {tab === "css" && <CssTab config={css} onChange={setCss} />}
-            </div>
-          </div>
-
-          {/* Right: live preview */}
-          <div className="flex flex-col gap-3 w-full lg:w-56 lg:shrink-0">
-            <p className="text-sm font-medium shrink-0">Live preview</p>
-            <div className="shrink-0">
-              <CustomFrameRenderer frameId={previewId} config={activeConfig}>
-                <PreviewCard />
-              </CustomFrameRenderer>
-            </div>
-            <p className="text-[10px] text-muted-foreground">Updates instantly as you edit.</p>
-          </div>
-        </div>
-
-        <div className="shrink-0 flex justify-end gap-2 pt-4 border-t border-border mt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {saving ? "Saving…" : "Save to Library"}
-          </Button>
+        <div className="flex-1 min-h-0 overflow-y-auto themed-scroll">
+          {designerBody}
         </div>
       </DialogContent>
     </Dialog>
+
+    {savedFrameId && (
+      <PublishFrameDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        frameId={savedFrameId}
+        frameName={savedFrameName}
+        frameConfig={activeConfig}
+      />
+    )}
+    </>
   );
 }

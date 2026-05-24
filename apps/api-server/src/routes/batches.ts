@@ -259,10 +259,12 @@ function getFrameCosts(): Record<string, number> {
   };
 }
 
-// Resolve the cost-map key for a frame tier string
-// custom:{uuid} → looks up 'custom' key
-function frameCostKey(tier: string): string {
-  return tier.startsWith("custom:") ? "custom" : tier;
+// Resolve the cost-map key for a frame tier string.
+// Returns null for marketplace: tiers — cost is handled at purchase time, not here.
+function frameCostKey(tier: string): string | null {
+  if (tier.startsWith("marketplace:")) return null;
+  if (tier.startsWith("custom:")) return "custom";
+  return tier;
 }
 
 // Return frame costs so the frontend can show pricing
@@ -301,10 +303,40 @@ router.post("/batches/:batchId/banner-settings", async (req, res) => {
       if (cfErr || !cf) return res.status(404).json({ error: "Custom frame not found in this workspace" });
     }
 
+    // Marketplace frames: verify the workspace has already purchased the listing
+    if (frameTier !== undefined && typeof frameTier === 'string' && frameTier.startsWith('marketplace:')) {
+      const listingId = frameTier.slice(12);
+      const { data: listing, error: listErr } = await supabaseAdmin
+        .from("frame_listings")
+        .select("id, is_active, price")
+        .eq("id", listingId)
+        .maybeSingle();
+      if (listErr || !listing) return res.status(404).json({ error: "Marketplace frame listing not found" });
+      if (!listing.is_active) return res.status(410).json({ error: "This marketplace frame has been unpublished" });
+
+      const { data: purchase } = await supabaseAdmin
+        .from("frame_purchases")
+        .select("id")
+        .eq("listing_id", listingId)
+        .eq("workspace_id", batch.workspace_id)
+        .maybeSingle();
+      if (!purchase) {
+        return res.status(402).json({
+          error: "Marketplace frame not purchased",
+          code: "marketplace_frame_not_purchased",
+          listingId,
+          required: listing.price,
+        });
+      }
+      // No charge — purchase was handled by POST /marketplace/listings/:id/purchase
+    }
+
     // Charge only if this specific frame has never been purchased for this batch
-    if (frameTier !== undefined && frameTier !== 'none' && !paidFrames.includes(frameTier)) {
+    // (skip for marketplace: tiers which are tracked in frame_purchases, not paid_frames)
+    const costKey = frameCostKey(frameTier ?? '');
+    if (frameTier !== undefined && frameTier !== 'none' && costKey !== null && !paidFrames.includes(frameTier)) {
       const costs = getFrameCosts();
-      const cost = costs[frameCostKey(frameTier)] ?? 0;
+      const cost = costs[costKey] ?? 0;
       if (cost > 0) {
         const workspaceId = batch.workspace_id;
         const { data: ws, error: wsErr } = await supabaseAdmin

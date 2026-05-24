@@ -33,6 +33,8 @@ const TermsAndConditions = lazy(() => import("@/pages/TermsAndConditions"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
+const FrameInventory = lazy(() => import("@/pages/FrameInventory"));
+const AdminRedemptions = lazy(() => import("@/pages/AdminRedemptions"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,8 +49,12 @@ function AuthenticatedRouter() {
   // The builtin template editor is full-screen and renders its own chrome,
   // so it must NOT be wrapped in <Layout> (which adds sidebar + sticky header).
   const [isBuiltinEditor] = useRoute("/templates/builtin/:id");
+  const [isAdminRedemptions] = useRoute("/admin/redemptions");
   if (isBuiltinEditor) {
     return <BuiltinTemplateEditorPage />;
+  }
+  if (isAdminRedemptions) {
+    return <AdminRedemptions />;
   }
 
   return (
@@ -69,6 +75,7 @@ function AuthenticatedRouter() {
           <Route path="/workspace/invitations" component={Invitations} />
           <Route path="/invite" component={InviteAccept} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/frames" component={FrameInventory} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
@@ -77,7 +84,7 @@ function AuthenticatedRouter() {
 }
 
 // App paths that should never be treated as student profile slugs
-const KNOWN_APP_PATHS = ["/login", "/batches", "/history", "/wallet", "/templates", "/auth", "/verify", "/reports", "/workspace", "/invite", "/privacy", "/terms", "/forgot-password", "/reset-password", "/advanced", "/settings"];
+const KNOWN_APP_PATHS = ["/login", "/batches", "/history", "/wallet", "/templates", "/auth", "/verify", "/reports", "/workspace", "/invite", "/privacy", "/terms", "/forgot-password", "/reset-password", "/advanced", "/settings", "/frames", "/admin"];
 
 function AppRouter() {
   const { user, loading } = useAuth();

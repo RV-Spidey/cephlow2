@@ -12,6 +12,8 @@ import reportsRouter from "./reports.js";
 import approvalRouter from "./approval.js";
 import workspacesRouter from "./workspaces.js";
 import frameTemplatesRouter from "./frameTemplates.js";
+import frameMarketplaceRouter from "./frameMarketplace.js";
+import creatorCreditsRouter from "./creatorCredits.js";
 import { requireApproval } from "../middlewares/requireApproval.js";
 import { requireWorkspace } from "../middlewares/requireWorkspace.js";
 
@@ -23,6 +25,9 @@ router.use(approvalRouter);
 // Workspace management endpoints (and /invites/accept) — must NOT require workspace context.
 router.use(workspacesRouter);
 
+// Creator credit endpoints are user-scoped (no workspace context needed).
+router.use(creatorCreditsRouter);
+
 router.use(healthRouter);
 
 // All routes below this line are scoped to a workspace (X-Workspace-Id header required).
@@ -31,6 +36,7 @@ router.use(requireWorkspace);
 router.use(sheetsRouter);
 router.use(batchesRouter);
 router.use(frameTemplatesRouter);
+router.use(frameMarketplaceRouter);
 router.use(certificatesRouter);
 router.use(paymentsRouter);
 router.use(clientGenerateRouter);
