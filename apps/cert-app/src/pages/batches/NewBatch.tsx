@@ -119,9 +119,25 @@ export default function NewBatchWizard() {
   });
 
   const inbuiltSheet = inbuiltSheetData as any;
+
+  // Treat row 0 of the inbuilt spreadsheet as the header row (same as how the API processes it)
+  const inbuiltRawCols: string[] = inbuiltSheet?.columns ?? [];
+  const inbuiltFirstRow: Record<string, string> = inbuiltSheet?.rows?.[0] ?? {};
+  const inbuiltHeaders: string[] = inbuiltRawCols
+    .map((col: string) => inbuiltFirstRow[col]?.trim())
+    .filter(Boolean) as string[];
+  // Data rows for category detection start at index 1
+  const inbuiltDataRows: Record<string, string>[] = (inbuiltSheet?.rows ?? []).slice(1).map((row: Record<string, string>) => {
+    const mapped: Record<string, string> = {};
+    inbuiltRawCols.forEach((col: string, i: number) => {
+      if (inbuiltHeaders[i]) mapped[inbuiltHeaders[i]] = row[col] ?? "";
+    });
+    return mapped;
+  });
+
   const sheetHeaders: string[] =
     dataSourceKind === "inbuilt"
-      ? inbuiltSheet?.columns ?? []
+      ? inbuiltHeaders.length > 0 ? inbuiltHeaders : inbuiltRawCols
       : sheetData?.headers ?? [];
 
   const resolvedSheetDataLoading = dataSourceKind === "inbuilt" ? inbuiltSheetLoading : sheetDataLoading;
@@ -130,7 +146,7 @@ export default function NewBatchWizard() {
     if (!categoryColumn) return [] as string[];
     const rows: Record<string, string>[] =
       dataSourceKind === "inbuilt"
-        ? inbuiltSheet?.rows ?? []
+        ? inbuiltDataRows
         : (sheetData?.rows as Record<string, string>[]) ?? [];
     if (!rows.length) return [] as string[];
     const values = rows.map(r => r[categoryColumn]).filter(Boolean);

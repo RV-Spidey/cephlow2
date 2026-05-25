@@ -9,15 +9,17 @@ import {
 } from "@workspace/api-client-react";
 import { SpreadsheetEditorUI, type SheetData } from "@/components/spreadsheet-editor/SpreadsheetEditorUI";
 
-const DEFAULT_COLS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+const DEFAULT_COLS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"];
 const DEFAULT_ROW_COUNT = 50;
+const DEFAULT_FIRST_ROW_VALUES: Record<string, string> = { A: "Name", B: "Position", C: "Email", D: "Phone Number" };
 
 function createEmptyGrid(): SheetData {
   const empty: Record<string, string> = {};
   DEFAULT_COLS.forEach((c) => (empty[c] = ""));
+  const firstRow: Record<string, string> = { ...empty, ...DEFAULT_FIRST_ROW_VALUES };
   return {
     columns: DEFAULT_COLS,
-    rows: Array.from({ length: DEFAULT_ROW_COUNT }, () => ({ ...empty })),
+    rows: [firstRow, ...Array.from({ length: DEFAULT_ROW_COUNT - 1 }, () => ({ ...empty }))],
   };
 }
 import { useToast } from "@/hooks/use-toast";
