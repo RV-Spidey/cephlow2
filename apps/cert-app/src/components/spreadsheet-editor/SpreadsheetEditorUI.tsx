@@ -8,6 +8,9 @@ import {
   Trash2,
   Upload,
   X,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +48,8 @@ interface Props {
 }
 
 const MAX_HISTORY = 50;
+const ROW_GUTTER_FIT = 48;
+const ACTION_COL_FIT = 40;
 
 function getSelectionBounds(sel: SelectRange) {
   return {
@@ -90,6 +95,18 @@ export function SpreadsheetEditorUI({
   // Undo/redo
   const [history, setHistory] = useState<HistoryEntry[]>([{ columns: initialData.columns, rows: initialData.rows }]);
   const [historyIdx, setHistoryIdx] = useState(0);
+
+  const [zoom, setZoom] = useState(1);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const fitZoom = useCallback(() => {
+    const el = gridRef.current;
+    if (!el || columns.length === 0) return;
+    const availW = el.clientWidth;
+    const tableW = ROW_GUTTER_FIT + columns.reduce((s, _, i) => s + (colWidths[i] ?? 160), 0) + ACTION_COL_FIT;
+    const fit = Math.min(1, availW / tableW);
+    setZoom(Math.max(0.3, fit));
+  }, [columns, colWidths]);
 
   const { toast } = useToast();
   const savedRef = useRef({ name: initialName, columns: initialData.columns, rows: initialData.rows });
@@ -367,6 +384,11 @@ export function SpreadsheetEditorUI({
 
   useEffect(() => { activeCellRef.current?.focus(); }, [activeCell]);
 
+  // Auto-fit zoom on mount and when columns change significantly
+  useEffect(() => {
+    requestAnimationFrame(fitZoom);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Drag-select handlers ──────────────────────────────────────────────────
 
   const onCellMouseDown = (e: React.MouseEvent, ri: number, ci: number) => {
@@ -472,9 +494,8 @@ export function SpreadsheetEditorUI({
   // ── Render ────────────────────────────────────────────────────────────────
 
   const selBounds = selection ? getSelectionBounds(selection) : null;
-  // Explicit pixel width so the table can grow beyond the viewport and trigger X scroll
-  const ROW_GUTTER = 48;
-  const ACTION_COL = 40;
+  const ROW_GUTTER = ROW_GUTTER_FIT;
+  const ACTION_COL = ACTION_COL_FIT;
   const tableWidth = ROW_GUTTER + columns.reduce((s, _, i) => s + (colWidths[i] ?? 160), 0) + ACTION_COL;
 
   return (
@@ -553,6 +574,7 @@ export function SpreadsheetEditorUI({
 
       {/* ── Grid ── */}
       <div
+        ref={gridRef}
         className="flex-1 overflow-auto relative"
         style={{ cursor: isDragging ? "cell" : undefined }}
       >
@@ -572,6 +594,7 @@ export function SpreadsheetEditorUI({
             </Button>
           </div>
         ) : (
+          <div style={{ zoom, transformOrigin: "top left" }}>
           <table
             ref={tableRef}
             className="border-collapse text-sm select-none"
@@ -709,7 +732,41 @@ export function SpreadsheetEditorUI({
               </tr>
             </tbody>
           </table>
+          </div>
         )}
+
+        {/* Floating zoom control */}
+        <div className="sticky bottom-3 ml-auto mr-3 w-fit z-40 flex items-center gap-0.5 bg-background/90 backdrop-blur-sm border border-border rounded-lg shadow-md px-1 py-0.5">
+          <button
+            onClick={() => setZoom((z) => Math.max(0.3, +(z * 0.8).toFixed(2)))}
+            title="Zoom out"
+            className="p-1.5 rounded hover:bg-accent transition-colors"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={fitZoom}
+            title="Fit to screen"
+            className="px-2 py-1 text-xs font-mono hover:bg-accent rounded transition-colors min-w-[3rem] text-center"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.min(2, +(z * 1.25).toFixed(2)))}
+            title="Zoom in"
+            className="p-1.5 rounded hover:bg-accent transition-colors"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <button
+            onClick={fitZoom}
+            title="Fit columns to screen"
+            className="p-1.5 rounded hover:bg-accent transition-colors"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
