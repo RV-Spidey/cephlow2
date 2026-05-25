@@ -259,11 +259,11 @@ export function EditorToolbar({
         >
           {isFullscreen ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))} title="Zoom out">
+        <Button variant="ghost" size="sm" onClick={() => setZoom(Math.max(0.05, +(zoom * 0.8).toFixed(2)))} title="Zoom out">
           <ZoomOut className="w-4 h-4" />
         </Button>
         <span className="text-xs w-10 sm:w-12 text-center">{Math.round(zoom * 100)}%</span>
-        <Button variant="ghost" size="sm" onClick={() => setZoom(Math.min(4, zoom + 0.1))} title="Zoom in">
+        <Button variant="ghost" size="sm" onClick={() => setZoom(Math.min(4, +(zoom * 1.25).toFixed(2)))} title="Zoom in">
           <ZoomIn className="w-4 h-4" />
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setZoom(1)} title="Reset zoom" className="hidden sm:inline-flex">

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { uploadAssetToR2 } from "@workspace/api-client-react";
 import { ensureFontStylesInjected, BUNDLED_FONTS, ensureFontLoaded } from "./fonts";
 import { useEditorStore } from "./useEditorStore";
-import { Gamepad2 } from "lucide-react";
+import { Gamepad2, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { EditorCanvas } from "./EditorCanvas";
 import { EditorToolbar } from "./EditorToolbar";
 import { PropertiesPanel } from "./PropertiesPanel";
@@ -32,7 +32,17 @@ export function TemplateEditor({ initialDoc, initialName = "", saving, onSave, o
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [joystickVisible, setJoystickVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasAreaRef = useRef<HTMLDivElement>(null);
   const prevZoomRef = useRef(zoom);
+
+  const fitZoom = () => {
+    const area = canvasAreaRef.current;
+    if (!area) return;
+    const padding = 32;
+    const fitW = (area.clientWidth - padding) / store.doc.width;
+    const fitH = (area.clientHeight - padding) / store.doc.height;
+    setZoom(Math.max(0.05, Math.min(fitW, fitH)));
+  };
 
   useEffect(() => {
     const onChange = () => {
@@ -81,8 +91,9 @@ export function TemplateEditor({ initialDoc, initialName = "", saving, onSave, o
 
   useEffect(() => {
     ensureFontStylesInjected();
-    // Trigger loading so the canvas measures correctly
     Promise.all(BUNDLED_FONTS.flatMap((f) => [ensureFontLoaded(f.family, 400), ensureFontLoaded(f.family, 700)]));
+    // Auto-fit on mount so mobile users see the full canvas
+    requestAnimationFrame(fitZoom);
   }, []);
 
   // Lazy-load any non-bundled fonts referenced by the current document
@@ -181,8 +192,42 @@ export function TemplateEditor({ initialDoc, initialName = "", saving, onSave, o
         fullscreenContainer={isFullscreen ? (containerRef.current ?? null) : null}
       />
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <div className="flex-1 min-w-0 min-h-0 relative">
+        <div ref={canvasAreaRef} className="flex-1 min-w-0 min-h-0 relative">
           <EditorCanvas store={store} zoom={zoom} setZoom={setZoom} />
+
+          {/* Floating zoom control — always visible on canvas */}
+          <div className="absolute bottom-3 right-3 z-40 flex items-center gap-0.5 bg-background/90 backdrop-blur-sm border border-border rounded-lg shadow-md px-1 py-0.5">
+            <button
+              onClick={() => setZoom(Math.max(0.05, +(zoom * 0.8).toFixed(2)))}
+              title="Zoom out"
+              className="p-1.5 rounded hover:bg-accent transition-colors"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <button
+              onClick={fitZoom}
+              title="Fit to screen"
+              className="px-2 py-1 text-xs font-mono hover:bg-accent rounded transition-colors min-w-[3rem] text-center"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={() => setZoom(Math.min(4, +(zoom * 1.25).toFixed(2)))}
+              title="Zoom in"
+              className="p-1.5 rounded hover:bg-accent transition-colors"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <div className="w-px h-4 bg-border mx-0.5" />
+            <button
+              onClick={fitZoom}
+              title="Fit canvas to screen"
+              className="p-1.5 rounded hover:bg-accent transition-colors"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {isFullscreen && (
             <button
               onClick={() => setJoystickVisible((v) => !v)}

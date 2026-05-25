@@ -134,7 +134,7 @@ export function EditorCanvas({ store, zoom, setZoom }: Props) {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const next = zoom * (e.deltaY > 0 ? 0.9 : 1.1);
-    setZoom(Math.max(0.1, Math.min(4, next)));
+    setZoom(Math.max(0.05, Math.min(4, next)));
   };
 
   const stageWidth = doc.width * zoom;
