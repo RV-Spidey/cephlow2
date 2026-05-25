@@ -255,7 +255,7 @@ export function TemplateEditor({ initialDoc, initialName = "", saving, onSave, o
             />
           )}
         </div>
-        <div className={`flex flex-col bg-background shrink-0 border-l ${isFullscreen ? "w-44 max-h-none" : "w-full md:w-72 border-t md:border-t-0 md:border-l max-h-[45vh] md:max-h-none"}`}>
+        <div className={`flex flex-col bg-background shrink-0 border-l ${isFullscreen ? "w-[42vw] max-w-[280px] min-w-[200px] max-h-none" : "w-full md:w-72 border-t md:border-t-0 md:border-l max-h-[45vh] md:max-h-none"}`}>
           <div className="flex-1 min-h-0 overflow-y-auto">
             <PropertiesPanel store={store} />
           </div>
