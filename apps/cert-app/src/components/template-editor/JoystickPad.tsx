@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Props {
@@ -10,12 +10,15 @@ interface Props {
 export function JoystickPad({ onMoveStart, onMove, onMoveEnd }: Props) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always call the latest onMove so stale closures don't freeze the interval
+  const onMoveRef = useRef(onMove);
+  useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
 
   const startMove = (dx: number, dy: number) => {
     onMoveStart();
-    onMove(dx, dy);
+    onMoveRef.current(dx, dy);
     timeoutRef.current = setTimeout(() => {
-      intervalRef.current = setInterval(() => onMove(dx, dy), 40);
+      intervalRef.current = setInterval(() => onMoveRef.current(dx, dy), 40);
     }, 200);
   };
 
