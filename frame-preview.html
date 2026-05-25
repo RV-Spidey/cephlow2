@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cephlow — All Frame Styles</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #05080f;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      padding: 40px 24px 80px;
+      color: #fff;
+    }
+
+    h1 {
+      font-size: 9px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: #222;
+      margin-bottom: 52px;
+      text-align: center;
+      border-bottom: 1px solid #111;
+      padding-bottom: 14px;
+    }
+
+    .section { max-width: 1200px; margin: 0 auto 64px; }
+
+    .section-title {
+      font-size: 8px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #1e2a3a;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 32px 20px;
+    }
+
+    /* ══════════════════════════════
+       GRADIENT-BORDER CARDS (old)
+    ══════════════════════════════ */
+    .tier-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .tier-label {
+      font-size: 8px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #1e2a3a;
+    }
+    .card {
+      width: 100%;
+      aspect-ratio: 3/4;
+      background: #0d0d0d;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-title { font-size: 11px; font-weight: 900; letter-spacing: 0.15em; text-transform: uppercase; color: #fff; margin-bottom: 3px; position: relative; z-index: 2; }
+    .card-sub   { font-size: 7px;  letter-spacing: 0.2em;  text-transform: uppercase; color: #444; position: relative; z-index: 2; }
+    .card-badge { position: absolute; top: 11px; right: 11px; font-size: 6px; letter-spacing: 0.2em; text-transform: uppercase; padding: 2px 5px; border: 1px solid currentColor; z-index: 2; }
+
+    .fw { width: 100%; }
+
+    /* Bronze */
+    .fw-bronze { padding:3px; background:linear-gradient(135deg,#6b3a1f,#cd7f32,#e8a96a,#cd7f32,#6b3a1f); background-size:300% 300%; animation:spin 4s linear infinite; }
+    .fw-bronze .card .card-badge { color:#cd7f32; }
+
+    /* Silver */
+    .fw-silver { padding:3px; background:linear-gradient(90deg,#333,#c0c0c0,#fff,#c0c0c0,#333); background-size:300% 100%; animation:shimmer 2s linear infinite; }
+    .fw-silver .card .card-badge { color:#c0c0c0; }
+
+    /* Gold */
+    .fw-gold { padding:3px; background:linear-gradient(135deg,#7d5a00,#ffd700,#ffec6e,#ffd700,#7d5a00); background-size:300% 300%; animation:spin 3s linear infinite; box-shadow:0 0 24px rgba(255,215,0,.3); }
+    .fw-gold .card .card-badge { color:#ffd700; }
+
+    /* Cyberpunk */
+    .fw-cyberpunk { padding:3px; background:linear-gradient(90deg,#ff006e,#00f5ff,#ff006e,#00f5ff); background-size:400% 100%; animation:shimmer 1.4s linear infinite; box-shadow:0 0 18px rgba(255,0,110,.5),0 0 40px rgba(0,245,255,.3); }
+    .fw-cyberpunk .card { background:#05000f; }
+    .fw-cyberpunk .card::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,0,110,.04) 3px,rgba(255,0,110,.04) 4px); pointer-events:none; z-index:1; }
+    .fw-cyberpunk .card::after { content:''; position:absolute; top:-100%; left:0; right:0; height:40%; background:linear-gradient(transparent,rgba(0,245,255,.07),transparent); animation:scan 3s linear infinite; z-index:1; }
+    .fw-cyberpunk .card .card-badge { color:#ff006e; }
+    .fw-cyberpunk .card .card-title { color:#00f5ff; text-shadow:0 0 8px #00f5ff; }
+
+    /* Glitch */
+    .fw-glitch { padding:3px; background:linear-gradient(135deg,#ff0000,#00ff00,#0000ff,#ff0000); background-size:300% 300%; animation:spin 2s linear infinite; box-shadow:2px 0 0 #ff0000,-2px 0 0 #00ffff; }
+    .fw-glitch .card { background:#040404; }
+    .fw-glitch .card .card-title { animation:glitchText 3s infinite; }
+    .fw-glitch .card .card-badge { color:#0f0; }
+    .fw-glitch .card::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,0,.03) 2px,rgba(0,255,0,.03) 3px); pointer-events:none; z-index:1; animation:glitchScan 4s steps(1) infinite; }
+
+    /* Matrix */
+    .fw-matrix { padding:3px; background:linear-gradient(180deg,#003300,#00ff41,#003300,#00ff41); background-size:100% 400%; animation:matrixBorder 2s linear infinite; box-shadow:0 0 20px rgba(0,255,65,.4),0 0 60px rgba(0,255,65,.15); }
+    .fw-matrix .card { background:#000800; }
+    .fw-matrix .card::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,65,.05) 2px,rgba(0,255,65,.05) 3px); pointer-events:none; z-index:1; }
+    .fw-matrix .card .card-badge { color:#00ff41; }
+    .fw-matrix .card .card-title { color:#00ff41; text-shadow:0 0 10px #00ff41; font-size:10px; }
+    .fw-matrix .card .card-sub { color:#006620; }
+
+    /* Robotic */
+    .fw-robotic { padding:3px; position:relative; background:#111; }
+    .fw-robotic::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,#1a1a1a 0%,#888 45%,#fff 50%,#888 55%,#1a1a1a 100%); background-size:300% 100%; animation:mechSweep 2.5s ease-in-out infinite; }
+    .fw-robotic .card { position:relative; margin:3px; width:calc(100% - 6px); background:#0a0a0a; }
+    .fw-robotic .card::before { content:''; position:absolute; top:8px; left:8px; width:13px; height:13px; border-top:2px solid #888; border-left:2px solid #888; z-index:3; animation:cornerPulse 2s ease-in-out infinite; }
+    .fw-robotic .card::after { content:''; position:absolute; bottom:8px; right:8px; width:13px; height:13px; border-bottom:2px solid #888; border-right:2px solid #888; z-index:3; animation:cornerPulse 2s ease-in-out infinite reverse; }
+    .fw-robotic .card .card-badge { color:#666; border-color:#333; }
+    .fw-robotic .card .card-title { color:#aaa; }
+    .robotic-scan { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:1; }
+    .robotic-scan::after { content:''; position:absolute; top:-10%; left:0; right:0; height:3px; background:linear-gradient(90deg,transparent,rgba(100,200,255,.6),transparent); animation:scanLine 3s linear infinite; box-shadow:0 0 8px rgba(100,200,255,.8); }
+
+    /* Plasma */
+    .fw-plasma { padding:3px; background:linear-gradient(135deg,#5500ff,#aa00ff,#ff00aa,#5500ff,#00aaff,#5500ff); background-size:400% 400%; animation:spin 2s linear infinite; box-shadow:0 0 15px rgba(85,0,255,.6),0 0 40px rgba(170,0,255,.3),0 0 80px rgba(255,0,170,.15); }
+    .fw-plasma .card { background:#04000f; }
+    .fw-plasma .card::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%,rgba(85,0,255,.2),transparent 60%),radial-gradient(ellipse at 100% 100%,rgba(255,0,170,.15),transparent 60%); animation:plasmaGlow 4s ease-in-out infinite alternate; pointer-events:none; }
+    .fw-plasma .card .card-badge { color:#aa00ff; }
+    .fw-plasma .card .card-title { color:#cc88ff; text-shadow:0 0 12px rgba(170,0,255,.8); }
+
+    /* Fire */
+    .fw-fire { padding:3px; background:linear-gradient(135deg,#1a0000,#ff4500,#ff8c00,#ffd700,#ff4500,#1a0000); background-size:300% 300%; animation:spin 2.5s linear infinite; box-shadow:0 0 20px rgba(255,69,0,.5),0 0 50px rgba(255,140,0,.3),0 6px 30px rgba(255,215,0,.2); }
+    .fw-fire .card { background:#0a0200; }
+    .fw-fire .card::before { content:''; position:absolute; bottom:0; left:0; right:0; height:50%; background:linear-gradient(0deg,rgba(255,69,0,.12),transparent); pointer-events:none; }
+    .fw-fire .card .card-badge { color:#ff4500; }
+    .fw-fire .card .card-title { color:#ff8c00; text-shadow:0 0 10px rgba(255,140,0,.6); }
+
+    /* Ice */
+    .fw-ice { padding:3px; background:linear-gradient(135deg,#001133,#00aaff,#aadeff,#fff,#aadeff,#00aaff,#001133); background-size:300% 300%; animation:spin 5s linear infinite; box-shadow:0 0 20px rgba(0,170,255,.4),0 0 50px rgba(170,222,255,.2); }
+    .fw-ice .card { background:#00060f; }
+    .fw-ice .card .card-badge { color:#00aaff; }
+    .fw-ice .card .card-title { color:#aadeff; text-shadow:0 0 10px rgba(0,170,255,.6); }
+
+    /* Aurora */
+    .fw-aurora { padding:3px; background:linear-gradient(135deg,#001a00,#00ff88,#00ddff,#aa00ff,#00ff88,#001a00); background-size:400% 400%; animation:auroraSpin 4s ease-in-out infinite; box-shadow:0 0 25px rgba(0,255,136,.3),0 0 50px rgba(0,221,255,.2),0 0 80px rgba(170,0,255,.15); }
+    .fw-aurora .card { background:#000a05; }
+    .fw-aurora .card::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 20% 50%,rgba(0,255,136,.08),transparent 60%),radial-gradient(ellipse at 80% 30%,rgba(0,221,255,.08),transparent 60%),radial-gradient(ellipse at 50% 80%,rgba(170,0,255,.06),transparent 60%); animation:auroraShift 6s ease-in-out infinite alternate; pointer-events:none; }
+    .fw-aurora .card .card-badge { color:#00ff88; }
+    .fw-aurora .card .card-title { color:#00ddff; text-shadow:0 0 12px rgba(0,221,255,.7); }
+
+    /* Void */
+    .fw-void { padding:3px; background:linear-gradient(135deg,#0d0020,#3d0070,#6600cc,#3d0070,#0d0020); background-size:300% 300%; animation:spin 6s linear infinite; box-shadow:0 0 30px rgba(102,0,204,.5),0 0 60px rgba(61,0,112,.4); }
+    .fw-void .card { background:#04000e; }
+    .fw-void .card::before { content:''; position:absolute; inset:0; background-image:radial-gradient(circle,rgba(255,255,255,.7) 1px,transparent 1px),radial-gradient(circle,rgba(255,255,255,.4) 1px,transparent 1px),radial-gradient(circle,rgba(255,255,255,.5) 1px,transparent 1px); background-size:70px 70px,110px 110px,50px 50px; background-position:0 0,35px 35px,15px 55px; animation:starDrift 12s linear infinite; pointer-events:none; opacity:.4; }
+    .fw-void .card .card-badge { color:#6600cc; }
+    .fw-void .card .card-title { color:#9944ff; text-shadow:0 0 15px rgba(153,68,255,.6); }
+
+    /* Neon */
+    .fw-neon { padding:3px; background:#ff00ff; animation:neonPulse 1.5s ease-in-out infinite alternate; box-shadow:0 0 10px #ff00ff,0 0 25px #ff00ff,0 0 60px #ff00ff; }
+    .fw-neon .card { background:#08000a; }
+    .fw-neon .card .card-badge { color:#ff00ff; }
+    .fw-neon .card .card-title { color:#ff88ff; text-shadow:0 0 8px #ff00ff; }
+
+    /* Holographic */
+    .fw-holo { padding:3px; background:linear-gradient(135deg,#ff0080,#ff8c00,#ffff00,#00ff80,#00c8ff,#8000ff,#ff0080,#ff8c00,#ffff00,#00ff80,#00c8ff,#8000ff,#ff0080); background-size:500% 500%; animation:holoShift 3s linear infinite; box-shadow:0 0 20px rgba(255,0,128,.3),0 0 40px rgba(0,200,255,.2),0 0 60px rgba(128,0,255,.2); }
+    .fw-holo .card { background:#030303; }
+    .fw-holo .card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,0,128,.06),rgba(255,140,0,.06),rgba(0,200,255,.06),rgba(128,0,255,.06),rgba(255,0,128,.06)); background-size:400% 400%; animation:holoShift 5s linear infinite reverse; pointer-events:none; }
+    .fw-holo .card .card-badge { color:#ff0080; }
+    .fw-holo .card .card-title { background:linear-gradient(90deg,#ff0080,#00c8ff,#8000ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; background-size:200% 100%; animation:holoText 2s linear infinite; }
+
+    /* Synthwave */
+    .fw-synthwave { padding:3px; background:linear-gradient(135deg,#1a0033,#ff006e,#ff9900,#ff006e,#1a0033); background-size:300% 300%; animation:spin 3.5s linear infinite; box-shadow:0 0 20px rgba(255,0,110,.4),0 4px 30px rgba(255,153,0,.3); }
+    .fw-synthwave .card { background:#08000f; }
+    .fw-synthwave .card::before { content:''; position:absolute; bottom:0; left:0; right:0; height:55%; background:repeating-linear-gradient(0deg,transparent,transparent 12px,rgba(255,0,110,.06) 12px,rgba(255,0,110,.06) 13px),linear-gradient(0deg,rgba(255,0,110,.12),transparent); pointer-events:none; }
+    .fw-synthwave .card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:55%; background:repeating-linear-gradient(90deg,transparent,transparent 30px,rgba(255,153,0,.05) 30px,rgba(255,153,0,.05) 31px); pointer-events:none; }
+    .fw-synthwave .card .card-badge { color:#ff006e; }
+    .fw-synthwave .card .card-title { color:#ff9900; text-shadow:0 0 12px rgba(255,153,0,.7); }
+
+    /* Laser */
+    .fw-laser { padding:3px; position:relative; background:#0a0a0a; overflow:visible; }
+    .fw-laser::before { content:''; position:absolute; inset:-1px; background:conic-gradient(from 0deg,transparent 0deg,#00ffff 10deg,transparent 20deg); animation:laserTrace 2s linear infinite; box-shadow:0 0 12px #00ffff,0 0 30px rgba(0,255,255,.4); }
+    .fw-laser .card { position:relative; margin:3px; width:calc(100% - 6px); background:#020a0a; z-index:1; }
+    .fw-laser .card .card-badge { color:#00ffff; }
+    .fw-laser .card .card-title { color:#00ffff; text-shadow:0 0 8px #00ffff; }
+
+    /* Quantum */
+    .fw-quantum { padding:3px; position:relative; background:#050510; }
+    .fw-quantum::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent 0%,#0088ff 50%,transparent 100%),linear-gradient(180deg,transparent 0%,#0044ff 50%,transparent 100%); background-size:200% 100%,100% 200%; animation:quantumH 2s linear infinite,quantumV 3s linear infinite; opacity:.9; }
+    .fw-quantum .card { position:relative; margin:3px; width:calc(100% - 6px); background:#01010a; z-index:1; }
+    .fw-quantum .card::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent,transparent 8px,rgba(0,136,255,.04) 8px,rgba(0,136,255,.04) 9px); pointer-events:none; }
+    .fw-quantum .card .card-badge { color:#0088ff; }
+    .fw-quantum .card .card-title { color:#4488ff; text-shadow:0 0 8px rgba(0,136,255,.7); }
+
+    /* ══════════════════════════════
+       HUD / SVG CARDS (new)
+    ══════════════════════════════ */
+    .hud-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .hud-card {
+      width: 100%;
+      aspect-ratio: 3/4;
+      position: relative;
+      overflow: hidden;
+    }
+    .hud-bg           { position:absolute; inset:0; background:#060c14; }
+    .hud-bg.gold-bg   { background:#0c0800; }
+    .hud-bg.mono-bg   { background:#f0f0f0; }
+    .hud-bg.red-bg    { background:#0f0004; }
+    .hud-bg.purple-bg { background:#06020f; }
+
+    .scan-line { position:absolute; inset:0; pointer-events:none; z-index:3; overflow:hidden; }
+    .scan-line::after { content:''; position:absolute; top:-20%; left:0; right:0; height:6%; background:linear-gradient(transparent,rgba(0,180,255,.06),transparent); animation:scanDown 4s linear infinite; }
+
+    .hud-frame { position:absolute; inset:0; width:100%; height:100%; z-index:2; }
+
+    .hud-content { position:absolute; bottom:0; left:0; right:0; padding:14px; z-index:4; }
+    .hud-title   { font-size:11px; font-weight:900; letter-spacing:0.15em; text-transform:uppercase; margin-bottom:2px; }
+    .hud-sub     { font-size:7px; letter-spacing:0.2em; text-transform:uppercase; color:#1a2535; }
+    .hud-badge   { position:absolute; top:12px; right:12px; font-size:6px; letter-spacing:0.2em; text-transform:uppercase; padding:2px 5px; border:1px solid currentColor; z-index:5; }
+
+    .glow-blue   { filter:drop-shadow(0 0 4px rgba(0,170,255,.8))  drop-shadow(0 0 14px rgba(0,170,255,.35)); animation:glowP 3s ease-in-out infinite alternate; }
+    .glow-cyan   { filter:drop-shadow(0 0 4px rgba(0,255,200,.8))  drop-shadow(0 0 14px rgba(0,255,200,.35)); animation:glowP 2.5s ease-in-out infinite alternate; }
+    .glow-gold   { filter:drop-shadow(0 0 4px rgba(255,170,0,.8))  drop-shadow(0 0 14px rgba(255,170,0,.35)); animation:glowP 3.5s ease-in-out infinite alternate; }
+    .glow-red    { filter:drop-shadow(0 0 4px rgba(255,40,40,.8))  drop-shadow(0 0 14px rgba(255,40,40,.35)); animation:glowP 2s ease-in-out infinite alternate; }
+    .glow-purple { filter:drop-shadow(0 0 4px rgba(160,80,255,.8)) drop-shadow(0 0 14px rgba(160,80,255,.35)); animation:glowP 4s ease-in-out infinite alternate; }
+    .glow-mono   { filter:drop-shadow(0 0 2px rgba(0,0,0,.4)); }
+
+    .dot-pulse { animation:dotP 1.5s ease-in-out infinite alternate; }
+
+    /* ══════════════════════════════
+       KEYFRAMES
+    ══════════════════════════════ */
+    @keyframes spin         { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes shimmer      { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    @keyframes scan         { 0%{top:-40%} 100%{top:120%} }
+    @keyframes scanLine     { 0%{top:-5%} 100%{top:110%} }
+    @keyframes scanDown     { 0%{top:-20%} 100%{top:110%} }
+    @keyframes mechSweep    { 0%,100%{background-position:-100% 0} 50%{background-position:200% 0} }
+    @keyframes cornerPulse  { 0%,100%{opacity:.4} 50%{opacity:1} }
+    @keyframes plasmaGlow   { 0%{opacity:.5;transform:scale(1)} 100%{opacity:1;transform:scale(1.05)} }
+    @keyframes auroraSpin   { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes auroraShift  { 0%{opacity:.5} 100%{opacity:1;transform:translateY(-4px)} }
+    @keyframes starDrift    { 0%{background-position:0 0,35px 35px,15px 55px} 100%{background-position:70px 70px,145px 145px,65px 105px} }
+    @keyframes neonPulse    { 0%{box-shadow:0 0 8px #ff00ff,0 0 20px #ff00ff,0 0 40px #ff00ff;background:#cc00cc} 100%{box-shadow:0 0 15px #ff00ff,0 0 40px #ff00ff,0 0 90px #ff00ff,0 0 140px rgba(255,0,255,.3);background:#ff00ff} }
+    @keyframes holoShift    { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    @keyframes holoText     { 0%{background-position:0% 0} 100%{background-position:200% 0} }
+    @keyframes laserTrace   { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes matrixBorder { 0%{background-position:0 0} 100%{background-position:0 400%} }
+    @keyframes quantumH     { 0%{background-position:-200% 0,0 0} 100%{background-position:200% 0,0 0} }
+    @keyframes quantumV     { 0%{background-position:0 0,0 -200%} 100%{background-position:0 0,0 200%} }
+    @keyframes glitchText   { 0%,92%,100%{transform:none;text-shadow:none} 93%{transform:translate(-2px,0);text-shadow:2px 0 #f00,-2px 0 #0ff} 95%{transform:translate(2px,0);text-shadow:-2px 0 #f00,2px 0 #0ff} 97%{transform:translate(0,-1px);text-shadow:1px 0 #0ff,-1px 0 #f00} }
+    @keyframes glitchScan   { 0%,94%,100%{opacity:1;clip-path:none} 95%{clip-path:polygon(0 20%,100% 20%,100% 22%,0 22%);background:rgba(255,0,0,.15)} 97%{clip-path:polygon(0 60%,100% 60%,100% 63%,0 63%);background:rgba(0,255,0,.1)} }
+    @keyframes glowP        { 0%{opacity:.8} 100%{opacity:1} }
+    @keyframes dotP         { 0%{opacity:.3} 100%{opacity:1} }
+  </style>
+</head>
+<body>
+
+<h1>Cephlow — All Certificate Frame Styles</h1>
+
+<!-- ══════════════════════════════════
+     SECTION 1 — CLASSIC
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── Classic ──</div>
+  <div class="grid">
+    <div class="tier-wrap">
+      <div class="fw fw-bronze"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Bronze</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-silver"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Silver</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-gold"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Gold</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 2 — CYBERPUNK / DIGITAL
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── Cyberpunk / Digital ──</div>
+  <div class="grid">
+    <div class="tier-wrap">
+      <div class="fw fw-cyberpunk"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Cyberpunk</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-glitch"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Glitch</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-matrix"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Matrix</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-synthwave"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Synthwave</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-laser"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Laser Trace</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-quantum"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Quantum</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 3 — SCI-FI / TECH
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── Sci-Fi / Tech ──</div>
+  <div class="grid">
+    <div class="tier-wrap">
+      <div class="fw fw-robotic">
+        <div class="card">
+          <div class="robotic-scan"></div>
+          <span class="card-badge">Generated</span>
+          <div class="card-title">Certificate</div>
+          <div class="card-sub">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Robotic</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-plasma"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Plasma</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 4 — ELEMENTAL
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── Elemental ──</div>
+  <div class="grid">
+    <div class="tier-wrap">
+      <div class="fw fw-fire"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Fire</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-ice"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Ice</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-aurora"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Aurora</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-void"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Void</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 5 — PREMIUM
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── Premium ──</div>
+  <div class="grid">
+    <div class="tier-wrap">
+      <div class="fw fw-neon"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Neon Pulse</div>
+    </div>
+    <div class="tier-wrap">
+      <div class="fw fw-holo"><div class="card"><span class="card-badge">Generated</span><div class="card-title">Certificate</div><div class="card-sub">Issued for · Batch</div></div></div>
+      <div class="tier-label">Holographic</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 6 — HUD · APEX
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── HUD · Apex (Striped Corner) ──</div>
+  <div class="grid">
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#00aaff;">Generated</div>
+        <svg class="hud-frame glow-blue" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 26 0 L 180 0 L 180 240 L 0 240 L 0 26 Z" fill="none" stroke="#00aaff" stroke-width="1.5"/>
+          <polygon points="0,0 30,0 0,30" fill="#00aaff"/>
+          <line x1="8" y1="0" x2="0" y2="8" stroke="#060c14" stroke-width="3.5"/>
+          <line x1="17" y1="0" x2="0" y2="17" stroke="#060c14" stroke-width="3.5"/>
+          <line x1="26" y1="0" x2="0" y2="26" stroke="#060c14" stroke-width="3.5"/>
+          <rect x="105" y="0" width="52" height="5" fill="#00aaff"/>
+          <line x1="90" y1="2.5" x2="103" y2="2.5" stroke="#00aaff" stroke-width="1.5"/>
+          <rect x="168" y="0" width="12" height="12" fill="#00aaff" opacity="0.4"/>
+          <rect x="6"  y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="10" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="14" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="18" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="22" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="26" y="235" width="2" height="5" fill="#00aaff"/>
+          <rect x="30" y="235" width="2" height="5" fill="#00aaff"/>
+          <rect x="34" y="236" width="2" height="4" fill="#00aaff" opacity="0.5"/>
+          <path d="M 120 240 L 120 233 L 178 233" fill="none" stroke="#00aaff" stroke-width="1.5"/>
+          <rect x="121" y="234" width="57" height="5" fill="#00aaff" opacity="0.2"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#00aaff;text-shadow:0 0 8px rgba(0,170,255,.5);">Certificate</div>
+          <div class="hud-sub">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Apex · Blue</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg gold-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#ffaa00;">Generated</div>
+        <svg class="hud-frame glow-gold" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 26 0 L 180 0 L 180 240 L 0 240 L 0 26 Z" fill="none" stroke="#ffaa00" stroke-width="1.5"/>
+          <polygon points="0,0 30,0 0,30" fill="#ffaa00"/>
+          <line x1="8"  y1="0" x2="0" y2="8"  stroke="#0c0800" stroke-width="3.5"/>
+          <line x1="17" y1="0" x2="0" y2="17" stroke="#0c0800" stroke-width="3.5"/>
+          <line x1="26" y1="0" x2="0" y2="26" stroke="#0c0800" stroke-width="3.5"/>
+          <rect x="105" y="0" width="52" height="5" fill="#ffaa00"/>
+          <line x1="90" y1="2.5" x2="103" y2="2.5" stroke="#ffaa00" stroke-width="1.5"/>
+          <rect x="6"  y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="10" y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="14" y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="18" y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="22" y="234" width="2" height="6" fill="#ffaa00"/>
+          <path d="M 120 240 L 120 233 L 178 233" fill="none" stroke="#ffaa00" stroke-width="1.5"/>
+          <rect x="121" y="234" width="57" height="5" fill="#ffaa00" opacity="0.2"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#1a1000;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Apex · Gold</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg mono-bg"></div>
+        <div class="hud-badge" style="color:#111;border-color:#111;">Generated</div>
+        <svg class="hud-frame glow-mono" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 26 0 L 180 0 L 180 240 L 0 240 L 0 26 Z" fill="none" stroke="#111" stroke-width="1.5"/>
+          <polygon points="0,0 30,0 0,30" fill="#111"/>
+          <line x1="8"  y1="0" x2="0" y2="8"  stroke="#f0f0f0" stroke-width="3.5"/>
+          <line x1="17" y1="0" x2="0" y2="17" stroke="#f0f0f0" stroke-width="3.5"/>
+          <line x1="26" y1="0" x2="0" y2="26" stroke="#f0f0f0" stroke-width="3.5"/>
+          <rect x="105" y="0" width="52" height="5" fill="#111"/>
+          <line x1="90" y1="2.5" x2="103" y2="2.5" stroke="#111" stroke-width="1.5"/>
+          <rect x="6"  y="234" width="2" height="6" fill="#111"/>
+          <rect x="10" y="234" width="2" height="6" fill="#111"/>
+          <rect x="14" y="234" width="2" height="6" fill="#111"/>
+          <rect x="18" y="234" width="2" height="6" fill="#111"/>
+          <rect x="22" y="234" width="2" height="6" fill="#111"/>
+          <path d="M 120 240 L 120 233 L 178 233" fill="none" stroke="#111" stroke-width="1.5"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#111;text-shadow:none;">Certificate</div>
+          <div class="hud-sub" style="color:#888;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Apex · Mono</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 7 — HUD · NEXUS
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── HUD · Nexus (Chamfered + Notched) ──</div>
+  <div class="grid">
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#00ffc8;">Generated</div>
+        <svg class="hud-frame glow-cyan" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 18 0 L 162 0 L 180 18 L 180 222 L 162 240 L 18 240 L 0 222 L 0 18 Z" fill="none" stroke="#00ffc8" stroke-width="1.5"/>
+          <polygon points="0,0 18,0 0,18" fill="#00ffc8"/>
+          <polygon points="180,0 162,0 180,18" fill="#00ffc8"/>
+          <polygon points="0,240 18,240 0,222" fill="#00ffc8"/>
+          <polygon points="180,240 162,240 180,222" fill="#00ffc8"/>
+          <line x1="18" y1="8" x2="8" y2="18" stroke="#00ffc8" stroke-width="1" opacity="0.5"/>
+          <line x1="162" y1="8" x2="172" y2="18" stroke="#00ffc8" stroke-width="1" opacity="0.5"/>
+          <line x1="18" y1="232" x2="8" y2="222" stroke="#00ffc8" stroke-width="1" opacity="0.5"/>
+          <line x1="162" y1="232" x2="172" y2="222" stroke="#00ffc8" stroke-width="1" opacity="0.5"/>
+          <path d="M 70 0 L 70 12 L 110 12 L 110 0" fill="none" stroke="#00ffc8" stroke-width="1.5"/>
+          <rect x="71" y="1" width="38" height="11" fill="#00ffc8" opacity="0.15"/>
+          <circle cx="80" cy="6" r="1.5" fill="#00ffc8" class="dot-pulse"/>
+          <circle cx="90" cy="6" r="1.5" fill="#00ffc8" class="dot-pulse" style="animation-delay:.3s"/>
+          <circle cx="100" cy="6" r="1.5" fill="#00ffc8" class="dot-pulse" style="animation-delay:.6s"/>
+          <path d="M 70 240 L 70 228 L 110 228 L 110 240" fill="none" stroke="#00ffc8" stroke-width="1.5"/>
+          <path d="M 0 108 L 10 108 L 10 132 L 0 132" fill="none" stroke="#00ffc8" stroke-width="1"/>
+          <path d="M 180 108 L 170 108 L 170 132 L 180 132" fill="none" stroke="#00ffc8" stroke-width="1"/>
+          <rect x="30" y="2" width="4" height="4" fill="#00ffc8" opacity="0.4"/>
+          <rect x="36" y="2" width="4" height="4" fill="#00ffc8" opacity="0.25"/>
+          <rect x="140" y="2" width="4" height="4" fill="#00ffc8" opacity="0.4"/>
+          <rect x="146" y="2" width="4" height="4" fill="#00ffc8" opacity="0.25"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#00ffc8;text-shadow:0 0 8px rgba(0,255,200,.5);">Certificate</div>
+          <div class="hud-sub">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Nexus · Cyan</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg gold-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#ffaa00;">Generated</div>
+        <svg class="hud-frame glow-gold" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 18 0 L 162 0 L 180 18 L 180 222 L 162 240 L 18 240 L 0 222 L 0 18 Z" fill="none" stroke="#ffaa00" stroke-width="1.5"/>
+          <polygon points="0,0 18,0 0,18" fill="#ffaa00"/>
+          <polygon points="180,0 162,0 180,18" fill="#ffaa00"/>
+          <polygon points="0,240 18,240 0,222" fill="#ffaa00"/>
+          <polygon points="180,240 162,240 180,222" fill="#ffaa00"/>
+          <path d="M 70 0 L 70 12 L 110 12 L 110 0" fill="none" stroke="#ffaa00" stroke-width="1.5"/>
+          <rect x="71" y="1" width="38" height="11" fill="#ffaa00" opacity="0.15"/>
+          <circle cx="80" cy="6" r="1.5" fill="#ffaa00" class="dot-pulse"/>
+          <circle cx="90" cy="6" r="1.5" fill="#ffaa00" class="dot-pulse" style="animation-delay:.3s"/>
+          <circle cx="100" cy="6" r="1.5" fill="#ffaa00" class="dot-pulse" style="animation-delay:.6s"/>
+          <path d="M 70 240 L 70 228 L 110 228 L 110 240" fill="none" stroke="#ffaa00" stroke-width="1.5"/>
+          <path d="M 0 108 L 10 108 L 10 132 L 0 132" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <path d="M 180 108 L 170 108 L 170 132 L 180 132" fill="none" stroke="#ffaa00" stroke-width="1"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#1a1000;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Nexus · Gold</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg red-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#ff2244;">Generated</div>
+        <svg class="hud-frame glow-red" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 18 0 L 162 0 L 180 18 L 180 222 L 162 240 L 18 240 L 0 222 L 0 18 Z" fill="none" stroke="#ff2244" stroke-width="1.5"/>
+          <polygon points="0,0 18,0 0,18" fill="#ff2244"/>
+          <polygon points="180,0 162,0 180,18" fill="#ff2244"/>
+          <polygon points="0,240 18,240 0,222" fill="#ff2244"/>
+          <polygon points="180,240 162,240 180,222" fill="#ff2244"/>
+          <path d="M 70 0 L 70 12 L 110 12 L 110 0" fill="none" stroke="#ff2244" stroke-width="1.5"/>
+          <circle cx="80" cy="6" r="1.5" fill="#ff2244" class="dot-pulse"/>
+          <circle cx="90" cy="6" r="1.5" fill="#ff2244" class="dot-pulse" style="animation-delay:.3s"/>
+          <circle cx="100" cy="6" r="1.5" fill="#ff2244" class="dot-pulse" style="animation-delay:.6s"/>
+          <path d="M 70 240 L 70 228 L 110 228 L 110 240" fill="none" stroke="#ff2244" stroke-width="1.5"/>
+          <path d="M 0 108 L 10 108 L 10 132 L 0 132" fill="none" stroke="#ff2244" stroke-width="1"/>
+          <path d="M 180 108 L 170 108 L 170 132 L 180 132" fill="none" stroke="#ff2244" stroke-width="1"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#ff2244;text-shadow:0 0 8px rgba(255,34,68,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#1a000a;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Nexus · Red</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 8 — HUD · GRID
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── HUD · Grid (Double Bracket + Dots) ──</div>
+  <div class="grid">
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#00aaff;">Generated</div>
+        <svg class="hud-frame glow-blue" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="240" fill="none" stroke="#00aaff" stroke-width="1"/>
+          <path d="M 0 42 L 0 0 L 42 0" fill="none" stroke="#00aaff" stroke-width="3.5"/>
+          <path d="M 138 0 L 180 0 L 180 42" fill="none" stroke="#00aaff" stroke-width="3.5"/>
+          <path d="M 0 198 L 0 240 L 42 240" fill="none" stroke="#00aaff" stroke-width="3.5"/>
+          <path d="M 138 240 L 180 240 L 180 198" fill="none" stroke="#00aaff" stroke-width="3.5"/>
+          <rect x="0" y="0" width="10" height="10" fill="#00aaff"/>
+          <rect x="170" y="0" width="10" height="10" fill="#00aaff"/>
+          <rect x="0" y="230" width="10" height="10" fill="#00aaff"/>
+          <rect x="170" y="230" width="10" height="10" fill="#00aaff"/>
+          <rect x="10" y="14" width="160" height="212" fill="none" stroke="#00aaff" stroke-width="0.6" opacity="0.3"/>
+          <circle cx="60"  cy="7" r="2" fill="#00aaff" class="dot-pulse"/>
+          <circle cx="70"  cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:.2s"/>
+          <circle cx="80"  cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:.4s"/>
+          <circle cx="90"  cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:.6s"/>
+          <circle cx="100" cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:.8s"/>
+          <circle cx="110" cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:1s"/>
+          <circle cx="120" cy="7" r="2" fill="#00aaff" class="dot-pulse" style="animation-delay:1.2s"/>
+          <rect x="55"  y="234" width="5" height="5" fill="none" stroke="#00aaff" stroke-width="1"/>
+          <rect x="63"  y="234" width="5" height="5" fill="#00aaff" opacity="0.6"/>
+          <rect x="71"  y="234" width="5" height="5" fill="none" stroke="#00aaff" stroke-width="1"/>
+          <rect x="79"  y="234" width="5" height="5" fill="#00aaff" opacity="0.6"/>
+          <rect x="87"  y="234" width="5" height="5" fill="none" stroke="#00aaff" stroke-width="1"/>
+          <rect x="95"  y="234" width="5" height="5" fill="#00aaff" opacity="0.6"/>
+          <rect x="103" y="234" width="5" height="5" fill="none" stroke="#00aaff" stroke-width="1"/>
+          <rect x="111" y="234" width="5" height="5" fill="#00aaff" opacity="0.6"/>
+          <line x1="0" y1="120" x2="10" y2="120" stroke="#00aaff" stroke-width="1"/>
+          <circle cx="10" cy="120" r="2" fill="#00aaff" opacity="0.6"/>
+          <line x1="180" y1="120" x2="170" y2="120" stroke="#00aaff" stroke-width="1"/>
+          <circle cx="170" cy="120" r="2" fill="#00aaff" opacity="0.6"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#00aaff;text-shadow:0 0 8px rgba(0,170,255,.5);">Certificate</div>
+          <div class="hud-sub">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Grid · Blue</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg purple-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#aa55ff;">Generated</div>
+        <svg class="hud-frame glow-purple" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="240" fill="none" stroke="#aa55ff" stroke-width="1"/>
+          <path d="M 0 42 L 0 0 L 42 0" fill="none" stroke="#aa55ff" stroke-width="3.5"/>
+          <path d="M 138 0 L 180 0 L 180 42" fill="none" stroke="#aa55ff" stroke-width="3.5"/>
+          <path d="M 0 198 L 0 240 L 42 240" fill="none" stroke="#aa55ff" stroke-width="3.5"/>
+          <path d="M 138 240 L 180 240 L 180 198" fill="none" stroke="#aa55ff" stroke-width="3.5"/>
+          <rect x="0" y="0" width="10" height="10" fill="#aa55ff"/>
+          <rect x="170" y="0" width="10" height="10" fill="#aa55ff"/>
+          <rect x="0" y="230" width="10" height="10" fill="#aa55ff"/>
+          <rect x="170" y="230" width="10" height="10" fill="#aa55ff"/>
+          <rect x="10" y="14" width="160" height="212" fill="none" stroke="#aa55ff" stroke-width="0.6" opacity="0.3"/>
+          <circle cx="60"  cy="7" r="2" fill="#aa55ff" class="dot-pulse"/>
+          <circle cx="70"  cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:.2s"/>
+          <circle cx="80"  cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:.4s"/>
+          <circle cx="90"  cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:.6s"/>
+          <circle cx="100" cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:.8s"/>
+          <circle cx="110" cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:1s"/>
+          <circle cx="120" cy="7" r="2" fill="#aa55ff" class="dot-pulse" style="animation-delay:1.2s"/>
+          <rect x="55"  y="234" width="5" height="5" fill="none" stroke="#aa55ff" stroke-width="1"/>
+          <rect x="63"  y="234" width="5" height="5" fill="#aa55ff" opacity="0.6"/>
+          <rect x="71"  y="234" width="5" height="5" fill="none" stroke="#aa55ff" stroke-width="1"/>
+          <rect x="79"  y="234" width="5" height="5" fill="#aa55ff" opacity="0.6"/>
+          <rect x="87"  y="234" width="5" height="5" fill="none" stroke="#aa55ff" stroke-width="1"/>
+          <rect x="95"  y="234" width="5" height="5" fill="#aa55ff" opacity="0.6"/>
+          <rect x="103" y="234" width="5" height="5" fill="none" stroke="#aa55ff" stroke-width="1"/>
+          <rect x="111" y="234" width="5" height="5" fill="#aa55ff" opacity="0.6"/>
+          <line x1="0" y1="120" x2="10" y2="120" stroke="#aa55ff" stroke-width="1"/>
+          <circle cx="10" cy="120" r="2" fill="#aa55ff" opacity="0.6"/>
+          <line x1="180" y1="120" x2="170" y2="120" stroke="#aa55ff" stroke-width="1"/>
+          <circle cx="170" cy="120" r="2" fill="#aa55ff" opacity="0.6"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#aa55ff;text-shadow:0 0 8px rgba(170,85,255,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#12031a;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Grid · Purple</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg gold-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#ffaa00;">Generated</div>
+        <svg class="hud-frame glow-gold" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="240" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <path d="M 0 42 L 0 0 L 42 0" fill="none" stroke="#ffaa00" stroke-width="3.5"/>
+          <path d="M 138 0 L 180 0 L 180 42" fill="none" stroke="#ffaa00" stroke-width="3.5"/>
+          <path d="M 0 198 L 0 240 L 42 240" fill="none" stroke="#ffaa00" stroke-width="3.5"/>
+          <path d="M 138 240 L 180 240 L 180 198" fill="none" stroke="#ffaa00" stroke-width="3.5"/>
+          <rect x="0" y="0" width="10" height="10" fill="#ffaa00"/>
+          <rect x="170" y="0" width="10" height="10" fill="#ffaa00"/>
+          <rect x="0" y="230" width="10" height="10" fill="#ffaa00"/>
+          <rect x="170" y="230" width="10" height="10" fill="#ffaa00"/>
+          <rect x="10" y="14" width="160" height="212" fill="none" stroke="#ffaa00" stroke-width="0.6" opacity="0.3"/>
+          <circle cx="60"  cy="7" r="2" fill="#ffaa00" class="dot-pulse"/>
+          <circle cx="70"  cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:.2s"/>
+          <circle cx="80"  cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:.4s"/>
+          <circle cx="90"  cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:.6s"/>
+          <circle cx="100" cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:.8s"/>
+          <circle cx="110" cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:1s"/>
+          <circle cx="120" cy="7" r="2" fill="#ffaa00" class="dot-pulse" style="animation-delay:1.2s"/>
+          <rect x="55"  y="234" width="5" height="5" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="63"  y="234" width="5" height="5" fill="#ffaa00" opacity="0.6"/>
+          <rect x="71"  y="234" width="5" height="5" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="79"  y="234" width="5" height="5" fill="#ffaa00" opacity="0.6"/>
+          <rect x="87"  y="234" width="5" height="5" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="95"  y="234" width="5" height="5" fill="#ffaa00" opacity="0.6"/>
+          <rect x="103" y="234" width="5" height="5" fill="none" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="111" y="234" width="5" height="5" fill="#ffaa00" opacity="0.6"/>
+          <line x1="0" y1="120" x2="10" y2="120" stroke="#ffaa00" stroke-width="1"/>
+          <circle cx="10" cy="120" r="2" fill="#ffaa00" opacity="0.6"/>
+          <line x1="180" y1="120" x2="170" y2="120" stroke="#ffaa00" stroke-width="1"/>
+          <circle cx="170" cy="120" r="2" fill="#ffaa00" opacity="0.6"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#1a1000;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Grid · Gold</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     SECTION 9 — HUD · COMMAND
+══════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">── HUD · Command (Thick Header + Side Port) ──</div>
+  <div class="grid">
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#00aaff;top:26px;">Generated</div>
+        <svg class="hud-frame glow-blue" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="20" fill="#00aaff" opacity="0.9"/>
+          <rect x="6"  y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="10" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="14" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="18" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="22" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="26" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="30" y="5" width="2" height="10" fill="#060c14"/>
+          <rect x="34" y="5" width="2" height="10" fill="#060c14"/>
+          <polygon points="120,0 180,0 180,20 140,20" fill="#060c14" opacity="0.5"/>
+          <line x1="130" y1="0" x2="148" y2="20" stroke="#060c14" stroke-width="2.5"/>
+          <line x1="140" y1="0" x2="158" y2="20" stroke="#060c14" stroke-width="2.5"/>
+          <line x1="150" y1="0" x2="168" y2="20" stroke="#060c14" stroke-width="2.5"/>
+          <line x1="160" y1="0" x2="178" y2="20" stroke="#060c14" stroke-width="2.5"/>
+          <line x1="0"   y1="20" x2="0"   y2="240" stroke="#00aaff" stroke-width="1.5"/>
+          <line x1="180" y1="20" x2="180" y2="240" stroke="#00aaff" stroke-width="1.5"/>
+          <line x1="0" y1="240" x2="180" y2="240" stroke="#00aaff" stroke-width="1.5"/>
+          <rect x="0" y="106" width="8" height="6" fill="#060c14" stroke="#00aaff" stroke-width="1"/>
+          <rect x="0" y="114" width="8" height="6" fill="#060c14" stroke="#00aaff" stroke-width="1"/>
+          <rect x="0" y="122" width="8" height="6" fill="#060c14" stroke="#00aaff" stroke-width="1"/>
+          <rect x="0" y="130" width="8" height="6" fill="#060c14" stroke="#00aaff" stroke-width="1"/>
+          <rect x="5"  y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="9"  y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="13" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="17" y="234" width="2" height="6" fill="#00aaff"/>
+          <rect x="21" y="234" width="2" height="6" fill="#00aaff"/>
+          <line x1="136" y1="240" x2="154" y2="226" stroke="#00aaff" stroke-width="2"/>
+          <line x1="144" y1="240" x2="162" y2="226" stroke="#00aaff" stroke-width="2"/>
+          <line x1="152" y1="240" x2="170" y2="226" stroke="#00aaff" stroke-width="2"/>
+          <line x1="160" y1="240" x2="178" y2="226" stroke="#00aaff" stroke-width="2"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#00aaff;text-shadow:0 0 8px rgba(0,170,255,.5);">Certificate</div>
+          <div class="hud-sub">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Command · Blue</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg gold-bg"></div><div class="scan-line"></div>
+        <div class="hud-badge" style="color:#ffaa00;top:26px;">Generated</div>
+        <svg class="hud-frame glow-gold" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="20" fill="#ffaa00" opacity="0.9"/>
+          <rect x="6"  y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="10" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="14" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="18" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="22" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="26" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="30" y="5" width="2" height="10" fill="#0c0800"/>
+          <rect x="34" y="5" width="2" height="10" fill="#0c0800"/>
+          <polygon points="120,0 180,0 180,20 140,20" fill="#0c0800" opacity="0.5"/>
+          <line x1="130" y1="0" x2="148" y2="20" stroke="#0c0800" stroke-width="2.5"/>
+          <line x1="140" y1="0" x2="158" y2="20" stroke="#0c0800" stroke-width="2.5"/>
+          <line x1="150" y1="0" x2="168" y2="20" stroke="#0c0800" stroke-width="2.5"/>
+          <line x1="160" y1="0" x2="178" y2="20" stroke="#0c0800" stroke-width="2.5"/>
+          <line x1="0"   y1="20" x2="0"   y2="240" stroke="#ffaa00" stroke-width="1.5"/>
+          <line x1="180" y1="20" x2="180" y2="240" stroke="#ffaa00" stroke-width="1.5"/>
+          <line x1="0" y1="240" x2="180" y2="240" stroke="#ffaa00" stroke-width="1.5"/>
+          <rect x="0" y="106" width="8" height="6" fill="#0c0800" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="0" y="114" width="8" height="6" fill="#0c0800" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="0" y="122" width="8" height="6" fill="#0c0800" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="0" y="130" width="8" height="6" fill="#0c0800" stroke="#ffaa00" stroke-width="1"/>
+          <rect x="5"  y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="9"  y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="13" y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="17" y="234" width="2" height="6" fill="#ffaa00"/>
+          <rect x="21" y="234" width="2" height="6" fill="#ffaa00"/>
+          <line x1="136" y1="240" x2="154" y2="226" stroke="#ffaa00" stroke-width="2"/>
+          <line x1="144" y1="240" x2="162" y2="226" stroke="#ffaa00" stroke-width="2"/>
+          <line x1="152" y1="240" x2="170" y2="226" stroke="#ffaa00" stroke-width="2"/>
+          <line x1="160" y1="240" x2="178" y2="226" stroke="#ffaa00" stroke-width="2"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#ffaa00;text-shadow:0 0 8px rgba(255,170,0,.5);">Certificate</div>
+          <div class="hud-sub" style="color:#1a1000;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Command · Gold</div>
+    </div>
+
+    <div class="hud-wrap">
+      <div class="hud-card">
+        <div class="hud-bg mono-bg"></div>
+        <div class="hud-badge" style="color:#111;border-color:#111;top:26px;">Generated</div>
+        <svg class="hud-frame glow-mono" viewBox="0 0 180 240" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="180" height="20" fill="#111"/>
+          <rect x="6"  y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="10" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="14" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="18" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="22" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="26" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="30" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <rect x="34" y="5" width="2" height="10" fill="#f0f0f0"/>
+          <polygon points="120,0 180,0 180,20 140,20" fill="#f0f0f0" opacity="0.35"/>
+          <line x1="130" y1="0" x2="148" y2="20" stroke="#f0f0f0" stroke-width="2.5"/>
+          <line x1="140" y1="0" x2="158" y2="20" stroke="#f0f0f0" stroke-width="2.5"/>
+          <line x1="150" y1="0" x2="168" y2="20" stroke="#f0f0f0" stroke-width="2.5"/>
+          <line x1="160" y1="0" x2="178" y2="20" stroke="#f0f0f0" stroke-width="2.5"/>
+          <line x1="0"   y1="20" x2="0"   y2="240" stroke="#111" stroke-width="1.5"/>
+          <line x1="180" y1="20" x2="180" y2="240" stroke="#111" stroke-width="1.5"/>
+          <line x1="0" y1="240" x2="180" y2="240" stroke="#111" stroke-width="1.5"/>
+          <rect x="0" y="106" width="8" height="6" fill="#e0e0e0" stroke="#111" stroke-width="1"/>
+          <rect x="0" y="114" width="8" height="6" fill="#e0e0e0" stroke="#111" stroke-width="1"/>
+          <rect x="0" y="122" width="8" height="6" fill="#e0e0e0" stroke="#111" stroke-width="1"/>
+          <rect x="0" y="130" width="8" height="6" fill="#e0e0e0" stroke="#111" stroke-width="1"/>
+          <rect x="5"  y="234" width="2" height="6" fill="#111"/>
+          <rect x="9"  y="234" width="2" height="6" fill="#111"/>
+          <rect x="13" y="234" width="2" height="6" fill="#111"/>
+          <rect x="17" y="234" width="2" height="6" fill="#111"/>
+          <rect x="21" y="234" width="2" height="6" fill="#111"/>
+          <line x1="136" y1="240" x2="154" y2="226" stroke="#111" stroke-width="2"/>
+          <line x1="144" y1="240" x2="162" y2="226" stroke="#111" stroke-width="2"/>
+          <line x1="152" y1="240" x2="170" y2="226" stroke="#111" stroke-width="2"/>
+          <line x1="160" y1="240" x2="178" y2="226" stroke="#111" stroke-width="2"/>
+        </svg>
+        <div class="hud-content">
+          <div class="hud-title" style="color:#111;text-shadow:none;">Certificate</div>
+          <div class="hud-sub" style="color:#888;">Issued for · Batch</div>
+        </div>
+      </div>
+      <div class="tier-label">Command · Mono</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
