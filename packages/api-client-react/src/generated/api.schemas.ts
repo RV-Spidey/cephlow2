@@ -112,6 +112,8 @@ export interface Batch {
   sentCount: number;
   createdAt: string;
   bannerUrl?: string | null;
+  dataSourceKind?: 'google' | 'inbuilt';
+  spreadsheetId?: string | null;
 }
 
 export type CertificateStatus =

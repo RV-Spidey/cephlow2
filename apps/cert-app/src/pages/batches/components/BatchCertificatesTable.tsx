@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { LockedFeature } from "@/components/LockedFeature";
-import { Loader2, Clock, CheckCircle2, MailCheck, XCircle, AlertCircle, MessageCircle, CheckCheck, Truck, Send, Presentation, FileDown, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Clock, CheckCircle2, MailCheck, XCircle, AlertCircle, MessageCircle, CheckCheck, Truck, Send, FileDown, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { QrCodePopover } from "./QrCodePopover";
 
@@ -19,8 +19,6 @@ interface Props {
   certHasReport: (cert: any) => boolean;
   getCertReport: (cert: any) => ReportDetail | null;
   onReportClick: (entry: { cert: any; report: ReportDetail }) => void;
-  openingSlideCertId: string | null;
-  onOpenSlide: (cert: any) => void;
   onIndivEmail: (cert: any) => void;
   onIndivWa: (cert: any) => void;
   batchId: string;
@@ -30,7 +28,7 @@ interface Props {
 export function BatchCertificatesTable({
   batch, sortedCertificates, selectedCertIds, onSelectionChange,
   certHasReport, getCertReport, onReportClick,
-  openingSlideCertId, onOpenSlide, onIndivEmail, onIndivWa,
+  onIndivEmail, onIndivWa,
   batchId, getStatusColor,
 }: Props) {
   const [expandedCertIds, setExpandedCertIds] = useState<Set<string>>(new Set());
@@ -45,42 +43,58 @@ export function BatchCertificatesTable({
 
   const colSpan = batch.categoryColumn && batch.categoryTemplateMap ? 7 : 6;
 
-  const ActionButtons = ({ cert }: { cert: any }) => (
+  const canEmail = (cert: any) =>
+    cert.status === 'generated' || cert.status === 'sent' || cert.status === 'failed';
+  const canWa = (cert: any) =>
+    (cert.status === 'generated' || cert.status === 'sent' || cert.status === 'failed') && !!cert.r2PdfUrl;
+
+  // Desktop: labelled buttons
+  const DesktopActions = ({ cert }: { cert: any }) => (
     <>
-      {(cert.status === 'generated' || cert.status === 'sent') && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="hover-elevate w-full justify-start"
-          title="Open in Google Slides"
-          disabled={openingSlideCertId === cert.id}
-          onClick={() => onOpenSlide(cert)}
-        >
-          {openingSlideCertId === cert.id
-            ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-            : <Presentation className="w-3.5 h-3.5 mr-1.5" />}
-          Slides
-        </Button>
-      )}
       {(cert.r2PdfUrl || cert.pdfUrl) && (
-        <Button variant="outline" size="sm" asChild className="hover-elevate w-full justify-start">
-          <a href={`${(cert.r2PdfUrl || cert.pdfUrl)}${(cert.r2PdfUrl || cert.pdfUrl).includes('?') ? '&' : '?'}v=${cert.updatedAt ? encodeURIComponent(cert.updatedAt) : Date.now()}`} target="_blank" rel="noopener noreferrer" title="Download PDF">
-            <FileDown className="w-3.5 h-3.5 mr-1.5" />
-            PDF
+        <Button variant="outline" size="sm" asChild className="hover-elevate">
+          <a href={`${(cert.r2PdfUrl || cert.pdfUrl)}${(cert.r2PdfUrl || cert.pdfUrl).includes('?') ? '&' : '?'}v=${cert.updatedAt ? encodeURIComponent(cert.updatedAt) : Date.now()}`} target="_blank" rel="noopener noreferrer">
+            <FileDown className="w-3.5 h-3.5 mr-1.5" />PDF
           </a>
         </Button>
       )}
-      {(cert.status === 'generated' || cert.status === 'sent' || cert.status === 'failed') && cert.slideUrl && (
-        <Button variant="outline" size="sm" className="hover-elevate w-full justify-start" title="Send email" onClick={() => onIndivEmail(cert)}>
-          <Send className="w-3.5 h-3.5 mr-1.5" />
-          Email
+      {canEmail(cert) && (
+        <Button variant="outline" size="sm" className="hover-elevate" onClick={() => onIndivEmail(cert)}>
+          <Send className="w-3.5 h-3.5 mr-1.5" />Email
         </Button>
       )}
-      {(cert.status === 'generated' || cert.status === 'sent' || cert.status === 'failed') && cert.r2PdfUrl && (
+      {canWa(cert) && (
         <LockedFeature feature="WhatsApp delivery" inline>
-          <Button variant="outline" size="sm" className="hover-elevate w-full justify-start" title="Send via WhatsApp" onClick={() => onIndivWa(cert)}>
-            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />
-            WA
+          <Button variant="outline" size="sm" className="hover-elevate" onClick={() => onIndivWa(cert)}>
+            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />WA
+          </Button>
+        </LockedFeature>
+      )}
+      {(cert.status === 'generated' || cert.status === 'sent') && (
+        <QrCodePopover batchId={batchId} certId={cert.id} />
+      )}
+    </>
+  );
+
+  // Mobile: labelled buttons
+  const MobileActions = ({ cert }: { cert: any }) => (
+    <>
+      {(cert.r2PdfUrl || cert.pdfUrl) && (
+        <Button variant="outline" size="sm" asChild className="hover-elevate w-full justify-start">
+          <a href={`${(cert.r2PdfUrl || cert.pdfUrl)}${(cert.r2PdfUrl || cert.pdfUrl).includes('?') ? '&' : '?'}v=${cert.updatedAt ? encodeURIComponent(cert.updatedAt) : Date.now()}`} target="_blank" rel="noopener noreferrer">
+            <FileDown className="w-3.5 h-3.5 mr-1.5" />PDF
+          </a>
+        </Button>
+      )}
+      {canEmail(cert) && (
+        <Button variant="outline" size="sm" className="hover-elevate w-full justify-start" onClick={() => onIndivEmail(cert)}>
+          <Send className="w-3.5 h-3.5 mr-1.5" />Email
+        </Button>
+      )}
+      {canWa(cert) && (
+        <LockedFeature feature="WhatsApp delivery" inline>
+          <Button variant="outline" size="sm" className="hover-elevate w-full justify-start" onClick={() => onIndivWa(cert)}>
+            <MessageCircle className="w-3.5 h-3.5 mr-1.5" />WA
           </Button>
         </LockedFeature>
       )}
@@ -93,7 +107,7 @@ export function BatchCertificatesTable({
   const hasActions = (cert: any) =>
     cert.status === 'generated' ||
     cert.status === 'sent' ||
-    (cert.status === 'failed' && (cert.slideUrl || cert.r2PdfUrl)) ||
+    cert.status === 'failed' ||
     cert.r2PdfUrl ||
     cert.pdfUrl;
 
@@ -233,9 +247,9 @@ export function BatchCertificatesTable({
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </Button>
                         )}
-                        {/* Desktop: full action buttons */}
-                        <div className="hidden sm:flex flex-wrap items-center justify-end gap-1.5">
-                          <ActionButtons cert={cert} />
+                        {/* Desktop: icon-only actions */}
+                        <div className="hidden sm:flex items-center justify-end gap-1">
+                          <DesktopActions cert={cert} />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -245,7 +259,7 @@ export function BatchCertificatesTable({
                       <TableRow key={`${cert.id}-actions`} className={`sm:hidden ${certHasReport(cert) ? 'bg-foreground' : 'bg-muted/30'}`}>
                         <TableCell colSpan={colSpan} className="py-2 px-4">
                           <div className="grid grid-cols-3 gap-2">
-                            <ActionButtons cert={cert} />
+                            <MobileActions cert={cert} />
                           </div>
                         </TableCell>
                       </TableRow>

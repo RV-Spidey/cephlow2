@@ -5,7 +5,13 @@
       "Read(//c/c/cephlow after akshay contribution/after changing generation to client side/**)",
       "Bash(pnpm --filter api-server exec tsc --noEmit)",
       "Bash(git checkout main)",
-      "Bash(git checkout feature/*)"
+      "Bash(git checkout feature/*)",
+      "Bash(npx tsc *)",
+      "Bash(git -C \"c:\\\\cephloe after akshay contributuin\\\\after changing generation to client side\\\\cephlow2\" log --oneline -15)",
+      "Read(//c/cephloe/ after/ akshay/ contributuin/after/ changing/ generation/ to/ client/ side/cephlow2/apps/cert-app/**)",
+      "Bash(Get-ChildItem -Path \"c:\\\\cephloe after akshay contributuin\\\\after changing generation to client side\\\\cephlow2\\\\apps\\\\api-server\\\\src\\\\routes\" -File)",
+      "Bash(Select-Object Name)",
+      "Bash(findstr \"dev\\\\|start\\\\|build\")"
     ]
   },
   "hooks": {

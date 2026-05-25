@@ -13,3 +13,4 @@ export {
 } from "./custom-fetch";
 export * from "./extras";
 export * from "./builtin-templates";
+export * from "./spreadsheets";

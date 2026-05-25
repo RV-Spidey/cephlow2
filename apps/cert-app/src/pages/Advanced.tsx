@@ -28,6 +28,8 @@ import {
   useListBuiltinTemplates,
   useCreateBatch,
   getListBatchesQueryKey,
+  useListSpreadsheets,
+  useGetSpreadsheet,
   type SheetFile,
   type SlideTemplate,
 } from "@workspace/api-client-react";
@@ -53,7 +55,6 @@ import {
   Play,
   X,
   Loader2,
-  Upload,
   AlertTriangle,
   CheckCircle2,
   GitBranch,
@@ -64,14 +65,15 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface SpreadsheetData extends Record<string, unknown> {
-  source: "googlesheet" | "csv" | null;
+  source: "googlesheet" | "inbuilt" | null;
   sheetId: string;
   sheetName: string;
   tabName: string;
   columns: string[];
   rows: Record<string, string>[];
   routingColumns: string[];       // columns that have a ConditionNode spawned
-  fileName?: string;
+  inbuiltSpreadsheetId?: string;
+  inbuiltSpreadsheetName?: string;
 }
 
 interface ConditionData extends Record<string, unknown> {
@@ -151,27 +153,42 @@ function SpreadsheetNode({ id, data }: NodeProps) {
     [id, routingColumns, deleteElements, updateNodeData, setNodes, setEdges, getNode],
   );
 
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split(/\r?\n/).filter((l) => l.trim());
-      if (!lines.length) return;
-      const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-      const parsed = lines.slice(1).map((line) => {
-        const vals = line.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-        return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
+  const { data: spreadsheetsRes, isLoading: spreadsheetsLoading } = useListSpreadsheets({
+    query: { enabled: d.source === "inbuilt" } as any,
+  });
+  const spreadsheets = (spreadsheetsRes as any)?.spreadsheets ?? [];
+
+  const { data: inbuiltSheetData } = useGetSpreadsheet(
+    (d.inbuiltSpreadsheetId as string) || "",
+    { query: { enabled: !!d.inbuiltSpreadsheetId } } as any,
+  );
+
+  const prevInbuiltId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!inbuiltSheetData) return;
+    const sid = (inbuiltSheetData as any).id as string;
+    if (sid === prevInbuiltId.current) return;
+    prevInbuiltId.current = sid;
+
+    const rawCols: string[] = (inbuiltSheetData as any).columns ?? [];
+    const rawRows: Record<string, string>[] = (inbuiltSheetData as any).rows ?? [];
+
+    // Treat first data row as header names — only keep columns that have a value in row 1
+    const firstRow = rawRows[0];
+    const filledCols = rawCols.filter((c) => firstRow?.[c]?.trim());
+    if (filledCols.length > 0) {
+      const headers = filledCols.map((c) => firstRow[c].trim());
+      const dataRows = rawRows.slice(1).map((row) => {
+        const mapped: Record<string, string> = {};
+        filledCols.forEach((oldCol, i) => { mapped[headers[i]] = row[oldCol] ?? ""; });
+        return mapped;
       });
-      updateNodeData(id, {
-        columns: headers, rows: parsed, fileName: file.name,
-        source: "csv", sheetId: "", sheetName: "", tabName: "",
-        routingColumns: [],
-      });
-    };
-    reader.readAsText(file);
-  };
+      updateNodeData(id, { columns: headers, rows: dataRows, routingColumns: [] });
+    } else {
+      updateNodeData(id, { columns: rawCols, rows: rawRows, routingColumns: [] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(inbuiltSheetData as any)?.id]);
 
   return (
     <div className="bg-background border-2 border-border font-mono shadow-xl" style={{ minWidth: 280, maxWidth: 320 }}>
@@ -196,10 +213,10 @@ function SpreadsheetNode({ id, data }: NodeProps) {
               Google Sheet
             </button>
             <button
-              onClick={() => updateNodeData(id, { source: "csv", columns: [], rows: [], sheetId: "", sheetName: "", tabName: "", routingColumns: [] })}
-              className={`flex-1 text-[9px] py-1 px-2 border font-bold uppercase tracking-wider transition-colors ${d.source === "csv" ? "bg-foreground text-background border-foreground" : "border-border hover:border-foreground"}`}
+              onClick={() => updateNodeData(id, { source: "inbuilt", columns: [], rows: [], sheetId: "", sheetName: "", tabName: "", inbuiltSpreadsheetId: "", inbuiltSpreadsheetName: "", routingColumns: [] })}
+              className={`flex-1 text-[9px] py-1 px-2 border font-bold uppercase tracking-wider transition-colors ${d.source === "inbuilt" ? "bg-foreground text-background border-foreground" : "border-border hover:border-foreground"}`}
             >
-              CSV
+              Builtin
             </button>
           </div>
         </div>
@@ -226,20 +243,37 @@ function SpreadsheetNode({ id, data }: NodeProps) {
           </div>
         )}
 
-        {d.source === "csv" && (
+        {d.source === "inbuilt" && (
           <div className="space-y-1">
-            <span className="text-[9px] uppercase tracking-widest text-muted-foreground">Upload CSV</span>
-            <label className="nodrag flex items-center gap-2 border border-dashed border-border px-2 py-2 cursor-pointer hover:border-foreground transition-colors">
-              <Upload className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="text-[9px] text-muted-foreground truncate">
-                {(d.fileName as string) || "Click to upload CSV file"}
-              </span>
-              <input type="file" accept=".csv" onChange={handleCsvUpload} className="sr-only" />
-            </label>
-            {(d.columns as string[]).length > 0 && (
-              <div className="flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400">
-                <AlertTriangle className="w-3 h-3 shrink-0" />
-                <span>Batch generation requires Google Sheets</span>
+            <span className="text-[9px] uppercase tracking-widest text-muted-foreground">Spreadsheet</span>
+            {spreadsheetsLoading ? (
+              <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" /> Loading…
+              </div>
+            ) : spreadsheets.length === 0 ? (
+              <p className="text-[9px] text-muted-foreground/60">No spreadsheets yet. Create one from the Spreadsheets page.</p>
+            ) : (
+              <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                {spreadsheets.map((s: any) => {
+                  const selected = d.inbuiltSpreadsheetId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      className={`nodrag w-full text-left text-[9px] px-2 py-1 border font-mono truncate transition-colors ${selected ? "bg-foreground text-background border-foreground" : "border-border hover:border-foreground"}`}
+                      onClick={() =>
+                        updateNodeData(id, {
+                          inbuiltSpreadsheetId: s.id,
+                          inbuiltSpreadsheetName: s.name,
+                          columns: [],
+                          rows: [],
+                          routingColumns: [],
+                        })
+                      }
+                    >
+                      {s.name}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -836,8 +870,8 @@ function AdvancedInner() {
       return;
     }
     const sd = spreadsheetNode.data as SpreadsheetData;
-    if (!sd.sheetId) {
-      toast({ title: "Google Sheet required for generation", description: "Select a Google Sheet as your data source.", variant: "destructive" });
+    if (!sd.sheetId && !sd.inbuiltSpreadsheetId) {
+      toast({ title: "Select a data source", description: "Pick a Google Sheet or an inbuilt spreadsheet.", variant: "destructive" });
       return;
     }
 
@@ -937,9 +971,10 @@ function AdvancedInner() {
               templateId: ptd.templateId as string,
               templateName: ptd.templateName as string,
               templateKind: ptd.kind,
-              columnMap: primaryColMap,   // primary template's own map
+              columnMap: primaryColMap,
               emailColumn: emailCol,
               nameColumn: nameCol,
+              ...(sd.source === "inbuilt" ? { spreadsheetId: sd.inbuiltSpreadsheetId, dataSourceKind: "inbuilt" } : {}),
               ...(categoryColumn ? { categoryColumn, categoryTemplateMap } : {}),
             } as any,
           });
@@ -979,6 +1014,7 @@ function AdvancedInner() {
                   columnMap,
                   emailColumn: emailCol,
                   nameColumn: nameCol,
+                  ...(sd.source === "inbuilt" ? { spreadsheetId: sd.inbuiltSpreadsheetId, dataSourceKind: "inbuilt" } : {}),
                 } as any,
               });
               results[idx] = { ...results[idx], status: "success", batchId: batch.id };

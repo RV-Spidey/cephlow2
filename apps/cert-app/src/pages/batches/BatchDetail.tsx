@@ -10,7 +10,6 @@ import {
   getGetBatchQueryKey,
   useSendBatchWhatsapp,
   useSendCertEmail,
-  useOpenCertSlide,
   useSendCertWhatsapp,
   useSyncBatch,
   useGetWalletBalance,
@@ -70,8 +69,6 @@ export default function BatchDetail() {
   const [indivWaVar2, setIndivWaVar2] = useState("");
   const [indivWaVar3, setIndivWaVar3] = useState("<<EmailPrefix>>");
 
-  const [openingSlideCertId, setOpeningSlideCertId] = useState<string | null>(null);
-  const { mutateAsync: openCertSlideAsync } = useOpenCertSlide();
 
   const [activeReport, setActiveReport] = useState<{ cert: any; report: ReportDetail } | null>(null);
 
@@ -139,24 +136,10 @@ export default function BatchDetail() {
     },
   });
 
-  const handleOpenSlide = async (cert: any) => {
-    if (cert.slideUrl) { window.open(cert.slideUrl, "_blank", "noopener,noreferrer"); return; }
-    try {
-      setOpeningSlideCertId(cert.id);
-      const res = await openCertSlideAsync({ batchId, certId: cert.id });
-      refetch();
-      if (res?.slideUrl) window.open(res.slideUrl, "_blank", "noopener,noreferrer");
-    } catch (err: any) {
-      toast({ title: "Open Slides failed", description: err?.message || err?.data?.error, variant: "destructive" });
-    } finally {
-      setOpeningSlideCertId(null);
-    }
-  };
-
   const handleOpenIndivEmail = (cert: any) => {
     setIndivEmailCert(cert);
-    setIndivEmailSubject((batch as any).emailSubject || "");
-    setIndivEmailBody((batch as any).emailBody || "");
+    setIndivEmailSubject((batch as any).emailSubject || DEFAULT_SUBJECT);
+    setIndivEmailBody((batch as any).emailBody || DEFAULT_BODY);
   };
 
   const handleOpenIndivWa = (cert: any) => {
@@ -300,9 +283,11 @@ export default function BatchDetail() {
     </div>
   );
 
-  const handleOpenSend = () => { setEmailSubject(batch.emailSubject || ""); setEmailBody(batch.emailBody || ""); setSendModalOpen(true); };
+  const handleOpenSend = () => { setEmailSubject(batch.emailSubject || DEFAULT_SUBJECT); setEmailBody(batch.emailBody || DEFAULT_BODY); setSendModalOpen(true); };
   const handleOpenWa = () => { setWaVar1(batch.nameColumn ? `<<${batch.nameColumn}>>` : ""); setWaVar2(batch.name || ""); setWaModalOpen(true); };
   const rowDataHeaders: string[] = batch.certificates[0]?.rowData ? Object.keys(batch.certificates[0].rowData) : [];
+  const DEFAULT_SUBJECT = "Your Certificate is ready!";
+  const DEFAULT_BODY = `Hi <<${batch.nameColumn || "name"}>>,\n\nPlease find your certificate for ${batch.name} attached.\n\nBest,\nThe Team`;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -350,8 +335,6 @@ export default function BatchDetail() {
         certHasReport={certHasReport}
         getCertReport={getCertReport}
         onReportClick={setActiveReport}
-        openingSlideCertId={openingSlideCertId}
-        onOpenSlide={handleOpenSlide}
         onIndivEmail={handleOpenIndivEmail}
         onIndivWa={handleOpenIndivWa}
         batchId={batchId}

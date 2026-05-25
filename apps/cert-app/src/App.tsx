@@ -35,6 +35,8 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
 const FrameInventory = lazy(() => import("@/pages/FrameInventory"));
 const AdminRedemptions = lazy(() => import("@/pages/AdminRedemptions"));
+const SpreadsheetsListPage = lazy(() => import("@/pages/spreadsheets/SpreadsheetsList"));
+const SpreadsheetEditorPage = lazy(() => import("@/pages/spreadsheets/SpreadsheetEditor"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,12 +48,19 @@ const queryClient = new QueryClient({
 });
 
 function AuthenticatedRouter() {
-  // The builtin template editor is full-screen and renders its own chrome,
-  // so it must NOT be wrapped in <Layout> (which adds sidebar + sticky header).
+  // Full-screen editors render their own chrome — must NOT be wrapped in <Layout>.
   const [isBuiltinEditor] = useRoute("/templates/builtin/:id");
+  const [isSpreadsheetEditor] = useRoute("/spreadsheets/:id");
   const [isAdminRedemptions] = useRoute("/admin/redemptions");
   if (isBuiltinEditor) {
     return <BuiltinTemplateEditorPage />;
+  }
+  if (isSpreadsheetEditor) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <SpreadsheetEditorPage />
+      </Suspense>
+    );
   }
   if (isAdminRedemptions) {
     return <AdminRedemptions />;
@@ -75,6 +84,7 @@ function AuthenticatedRouter() {
           <Route path="/workspace/invitations" component={Invitations} />
           <Route path="/invite" component={InviteAccept} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/spreadsheets" component={SpreadsheetsListPage} />
           <Route path="/frames" component={FrameInventory} />
           <Route component={NotFound} />
         </Switch>
@@ -84,7 +94,7 @@ function AuthenticatedRouter() {
 }
 
 // App paths that should never be treated as student profile slugs
-const KNOWN_APP_PATHS = ["/login", "/batches", "/history", "/wallet", "/templates", "/auth", "/verify", "/reports", "/workspace", "/invite", "/privacy", "/terms", "/forgot-password", "/reset-password", "/advanced", "/settings", "/frames", "/admin"];
+const KNOWN_APP_PATHS = ["/login", "/batches", "/history", "/wallet", "/templates", "/auth", "/verify", "/reports", "/workspace", "/invite", "/privacy", "/terms", "/forgot-password", "/reset-password", "/advanced", "/settings", "/frames", "/admin", "/spreadsheets"];
 
 function AppRouter() {
   const { user, loading } = useAuth();

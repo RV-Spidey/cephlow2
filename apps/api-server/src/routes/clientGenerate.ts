@@ -304,9 +304,11 @@ router.post("/batches/:batchId/presigned-urls", presignedUrlLimiter, async (req,
     for (const cert of certificates) {
       const { certId, recipientName, rowData } = cert;
       const shortBatchId = (batchId as string).replace(/-/g, "").slice(0, 8);
-      const pdfName = `${(recipientName || "cert").replace(/[^a-zA-Z0-9]/g, "_")}_${(batchName || "batch").replace(/[^a-zA-Z0-9]/g, "_")}_${shortBatchId}`;
+      const safeName = (recipientName || "cert").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "cert";
+      const safeBatchName = (batchName || "batch").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "batch";
+      const pdfName = `${safeName}_${safeBatchName}_${shortBatchId}`;
       const phoneNumber = extractPhoneNumber(rowData || {});
-      const folderName = phoneNumber || (recipientName || "unknown").replace(/[^a-zA-Z0-9]/g, "_");
+      const folderName = phoneNumber || safeName;
 
       const { url, key } = await generatePresignedPutUrl(folderName, pdfName);
       const r2PdfUrl = getR2PublicUrl(key);

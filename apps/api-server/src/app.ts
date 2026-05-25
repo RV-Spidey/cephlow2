@@ -36,7 +36,12 @@ const heavyLimiter = rateLimit({
 
 
 app.use(globalLimiter);
-app.use(cors());
+app.use(cors({
+  origin: true,
+  allowedHeaders: ["Authorization", "Content-Type", "X-Workspace-Id"],
+  exposedHeaders: ["Content-Disposition"],
+  credentials: true,
+}));
 app.use(
   express.json({
     limit: "25mb",

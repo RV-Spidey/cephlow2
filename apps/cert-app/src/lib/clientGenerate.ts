@@ -680,29 +680,36 @@ export async function clientGenerate(
     // Cache auth params for the beforeunload beacon. getSession() hits the
     // in-memory Supabase cache so this adds no network round-trip.
     {
-      const _tok = await getSupabaseToken();
-      const _wsId = getActiveWorkspaceId();
-      const _p = new URLSearchParams({ token: _tok });
-      if (_wsId) _p.set("workspaceId", _wsId);
-      beaconParams = _p.toString();
+      const tok = await getSupabaseToken();
+      const wsId = getActiveWorkspaceId();
+      const p = new URLSearchParams({ token: tok });
+      if (wsId) p.set("workspaceId", wsId);
+      beaconParams = p.toString();
     }
 
-    // Step 2: Get Google access token
-    onProgress({
-      phase: "preparing",
-      current: 0,
-      total: totalToProcess,
-      currentCertName: "",
-      message: "Getting Google access token...",
-    });
-    let tokenData = await getGoogleAccessToken(apiBaseUrl);
-    let googleToken = tokenData.accessToken;
-    let tokenExpiresAt = tokenData.expiresAt;
+    // Step 2: Get Google access token (only needed for Google Slides templates)
+    const needsGoogle = batch.templateKind !== "builtin";
+    let googleToken = "";
+    let tokenExpiresAt = 0;
+
+    if (needsGoogle) {
+      onProgress({
+        phase: "preparing",
+        current: 0,
+        total: totalToProcess,
+        currentCertName: "",
+        message: "Getting Google access token...",
+      });
+      let tokenData = await getGoogleAccessToken(apiBaseUrl);
+      googleToken = tokenData.accessToken;
+      tokenExpiresAt = tokenData.expiresAt;
+    }
 
     // Helper to refresh token if expired
     const ensureToken = async () => {
+      if (!needsGoogle) return googleToken;
       if (Date.now() > tokenExpiresAt - 60_000) {
-        tokenData = await getGoogleAccessToken(apiBaseUrl);
+        const tokenData = await getGoogleAccessToken(apiBaseUrl);
         googleToken = tokenData.accessToken;
         tokenExpiresAt = tokenData.expiresAt;
       }
@@ -899,8 +906,8 @@ export async function clientGenerate(
               }
             } else {
               // Free tier: upload to the batch's Google Drive folder
-              const safeName = (cert.recipientName || "cert").replace(/[^a-zA-Z0-9]/g, "_");
-              const safeBatch = (batch.name || "batch").replace(/[^a-zA-Z0-9]/g, "_");
+              const safeName = (cert.recipientName || "cert").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "cert";
+              const safeBatch = (batch.name || "batch").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "batch";
               const filename = `${safeName}_${safeBatch}.pdf`;
               let lastErr: any = null;
               for (let attempt = 1; attempt <= 3; attempt++) {

@@ -1,0 +1,3 @@
+ALTER TABLE batches
+  ADD COLUMN IF NOT EXISTS spreadsheet_id   UUID REFERENCES spreadsheets(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS data_source_kind TEXT NOT NULL DEFAULT 'google';

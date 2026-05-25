@@ -20,6 +20,7 @@ import {
   Network,
   Settings,
   LayoutTemplate,
+  Table2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -67,6 +68,7 @@ const APPROVAL_WA_LINK = APPROVAL_WA_NUMBER
 const NAV_ITEMS = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, approvedOnly: false },
   { title: "Templates", url: "/templates", icon: Presentation, approvedOnly: false },
+  { title: "Spreadsheets", url: "/spreadsheets", icon: Table2, approvedOnly: false },
   { title: "New Batch", url: "/batches/new", icon: FilePlus2, approvedOnly: false },
   { title: "History", url: "/history", icon: History, approvedOnly: false },
   { title: "Wallet", url: "/wallet", icon: Wallet, approvedOnly: true },

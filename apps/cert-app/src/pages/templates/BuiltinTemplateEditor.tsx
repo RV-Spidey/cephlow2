@@ -12,6 +12,8 @@ import { TemplateEditor } from "@/components/template-editor/TemplateEditor";
 import { renderThumbnail } from "@/components/template-editor/thumbnail";
 import { emptyDocument, type CanvasDocument } from "@/components/template-editor/types";
 import { useToast } from "@/hooks/use-toast";
+import { useApproval } from "@/hooks/use-approval";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Loader2 } from "lucide-react";
 
 export default function BuiltinTemplateEditorPage() {
@@ -29,6 +31,8 @@ export default function BuiltinTemplateEditorPage() {
 
   const [docState, setDocState] = useState<CanvasDocument | null>(null);
   const [name, setName] = useState("");
+  const [pendingSave, setPendingSave] = useState<{ name: string; canvas: CanvasDocument } | null>(null);
+  const { isApproved } = useApproval();
 
   useEffect(() => {
     if (isNew && !docState) {
@@ -66,8 +70,7 @@ export default function BuiltinTemplateEditorPage() {
 
   const saving = creating || updating;
 
-  const handleSave = async ({ name: n, canvas }: { name: string; canvas: CanvasDocument }) => {
-    if (!n) return;
+  const doSave = async (n: string, canvas: CanvasDocument) => {
     setName(n);
     setDocState(canvas);
     let thumbnailUrl: string | null = null;
@@ -88,6 +91,16 @@ export default function BuiltinTemplateEditorPage() {
     }
   };
 
+  const handleSave = async ({ name: n, canvas }: { name: string; canvas: CanvasDocument }) => {
+    if (!n) return;
+    const hasQr = canvas.elements?.some((el: any) => el.type === "qr");
+    if (isApproved && !hasQr) {
+      setPendingSave({ name: n, canvas });
+      return;
+    }
+    await doSave(n, canvas);
+  };
+
   if (!isNew && isLoading && !docState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -99,12 +112,36 @@ export default function BuiltinTemplateEditorPage() {
   if (!docState) return null;
 
   return (
-    <TemplateEditor
-      initialDoc={docState}
-      initialName={name}
-      saving={saving}
-      onSave={handleSave}
-      onBack={() => setLocation("/templates")}
-    />
+    <>
+      <TemplateEditor
+        initialDoc={docState}
+        initialName={name}
+        saving={saving}
+        onSave={handleSave}
+        onBack={() => setLocation("/templates")}
+      />
+
+      <AlertDialog open={!!pendingSave} onOpenChange={(o) => { if (!o) setPendingSave(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No QR Code Added</AlertDialogTitle>
+            <AlertDialogDescription>
+              This template doesn't have a QR code element. Recipients won't be able to verify their certificates by scanning. It's strongly recommended to add a QR code before saving.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingSave(null)}>Go Back & Add QR</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (pendingSave) await doSave(pendingSave.name, pendingSave.canvas);
+                setPendingSave(null);
+              }}
+            >
+              Save Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

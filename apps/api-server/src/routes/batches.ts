@@ -51,20 +51,59 @@ router.post("/batches", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const {
-      name, sheetId, sheetName, tabName, templateId, templateName,
+      name, sheetId, sheetName, tabName,
+      spreadsheetId: inbuiltSpreadsheetId, dataSourceKind,
+      templateId, templateName,
       templateKind,
       columnMap, emailColumn, nameColumn, emailSubject, emailBody,
       categoryColumn, categoryTemplateMap, categorySlideMap, categorySlideIndexes,
       bannerUrl, frameTier,
     } = req.body;
 
-    const sheets = await getSheetsClient(userId);
-    const range = tabName ? tabName : "A:ZZ";
-    const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
+    const isInbuilt = dataSourceKind === "inbuilt";
+    let headers: string[];
+    let dataRows: Record<string, string>[];
+    let inbuiltSpreadsheetName = "";
 
-    const rows = response.data.values || [];
-    const headers = rows[0] as string[];
-    const dataRows = rows.slice(1).filter((r) => r.length > 0);
+    if (isInbuilt) {
+      const { data: spreadsheet, error: ssErr } = await supabaseAdmin
+        .from("spreadsheets")
+        .select("name, columns, rows")
+        .eq("id", inbuiltSpreadsheetId)
+        .eq("workspace_id", req.workspace!.id)
+        .single();
+      if (ssErr || !spreadsheet) return res.status(400).json({ error: "Spreadsheet not found" });
+      inbuiltSpreadsheetName = (spreadsheet as any).name ?? "";
+      const rawCols = spreadsheet.columns as string[];
+      const rawRows = spreadsheet.rows as Record<string, string>[];
+      // Mirror the frontend: treat first row as headers if it has values
+      const firstRow = rawRows[0];
+      const filledCols = rawCols.filter((c) => firstRow?.[c]?.trim());
+      if (filledCols.length > 0) {
+        headers = filledCols.map((c) => firstRow[c].trim());
+        dataRows = rawRows.slice(1)
+          .filter((r) => filledCols.some((c) => r[c]?.trim()))
+          .map((row) => {
+            const mapped: Record<string, string> = {};
+            filledCols.forEach((oldCol, i) => { mapped[headers[i]] = row[oldCol] ?? ""; });
+            return mapped;
+          });
+      } else {
+        headers = rawCols;
+        dataRows = rawRows.filter((r) => Object.values(r).some((v) => v?.trim()));
+      }
+    } else {
+      const sheets = await getSheetsClient(userId);
+      const range = tabName ? tabName : "A:ZZ";
+      const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
+      const rawRows = response.data.values || [];
+      headers = rawRows[0] as string[];
+      dataRows = rawRows.slice(1).filter((r) => r.length > 0).map((row) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = (row[i] as string) || ""; });
+        return obj;
+      });
+    }
 
     const approved = await isApprovedInContext(userId, req.workspace?.id);
 
@@ -98,9 +137,11 @@ router.post("/batches", async (req, res) => {
         user_id: userId,
         workspace_id: req.workspace!.id,
         name,
-        sheet_id: sheetId,
-        sheet_name: sheetName,
-        tab_name: tabName || null,
+        sheet_id: isInbuilt ? "" : sheetId,
+        sheet_name: isInbuilt ? inbuiltSpreadsheetName : sheetName,
+        tab_name: isInbuilt ? null : (tabName || null),
+        spreadsheet_id: isInbuilt ? inbuiltSpreadsheetId : null,
+        data_source_kind: isInbuilt ? "inbuilt" : "google",
         template_id: templateId,
         template_name: templateName,
         template_kind: kind,
@@ -129,9 +170,7 @@ router.post("/batches", async (req, res) => {
     if (batchErr) throw batchErr;
     const batchId = batchRow.id;
 
-    const certRows = dataRows.map((row) => {
-      const rowData: Record<string, string> = {};
-      headers.forEach((h, i) => { rowData[h] = (row[i] as string) || ""; });
+    const certRows = dataRows.map((rowData) => {
       return {
         batch_id: batchId,
         recipient_name: rowData[nameColumn] || "Unknown",
@@ -154,6 +193,7 @@ router.post("/batches", async (req, res) => {
 
     return res.status(201).json(toCamel(batchRow));
   } catch (err: any) {
+    console.error("[POST /batches] error:", err?.message ?? err);
     const uid = req.user?.uid;
     if (uid) {
       try { await handleGoogleError(uid, err); } catch (mapped: any) {
@@ -471,15 +511,45 @@ router.post("/batches/:batchId/sync", async (req, res) => {
     if (batchErr || !batch) return res.status(404).json({ error: "Batch not found" });
     if (!canAccessBatch(batch, req)) return res.status(403).json({ error: "Access denied" });
 
-    const sheets = await getSheetsClient(userId);
-    const range = batch.tab_name ? batch.tab_name : "A:ZZ";
-    const response = await sheets.spreadsheets.values.get({ spreadsheetId: batch.sheet_id, range });
+    let headers: string[];
+    let dataRows: Record<string, string>[];
 
-    const rows = response.data.values || [];
-    if (rows.length === 0) return res.status(400).json({ error: "Spreadsheet is empty." });
-
-    const headers = rows[0] as string[];
-    const dataRows = rows.slice(1).filter((r) => r.length > 0);
+    if (batch.data_source_kind === "inbuilt") {
+      const { data: spreadsheet, error: ssErr } = await supabaseAdmin
+        .from("spreadsheets")
+        .select("columns, rows")
+        .eq("id", batch.spreadsheet_id)
+        .single();
+      if (ssErr || !spreadsheet) return res.status(400).json({ error: "Inbuilt spreadsheet not found" });
+      const rawCols = spreadsheet.columns as string[];
+      const rawRows = spreadsheet.rows as Record<string, string>[];
+      const firstRow = rawRows[0];
+      const filledCols = rawCols.filter((c) => firstRow?.[c]?.trim());
+      if (filledCols.length > 0) {
+        headers = filledCols.map((c) => firstRow[c].trim());
+        dataRows = rawRows.slice(1).filter((r) => filledCols.some((c) => r[c]?.trim())).map((row) => {
+          const mapped: Record<string, string> = {};
+          filledCols.forEach((oldCol, i) => { mapped[headers[i]] = row[oldCol] ?? ""; });
+          return mapped;
+        });
+      } else {
+        headers = rawCols;
+        dataRows = rawRows.filter((r) => Object.values(r).some((v) => v?.trim()));
+      }
+      if (dataRows.length === 0) return res.status(400).json({ error: "Spreadsheet is empty." });
+    } else {
+      const sheets = await getSheetsClient(userId);
+      const range = batch.tab_name ? batch.tab_name : "A:ZZ";
+      const response = await sheets.spreadsheets.values.get({ spreadsheetId: batch.sheet_id, range });
+      const rawRows = response.data.values || [];
+      if (rawRows.length === 0) return res.status(400).json({ error: "Spreadsheet is empty." });
+      headers = rawRows[0] as string[];
+      dataRows = rawRows.slice(1).filter((r: any[]) => r.length > 0).map((row: any[]) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = (row[i] as string) || ""; });
+        return obj;
+      });
+    }
     const { name_column: nameColumn, email_column: emailColumn } = batch;
 
     const { data: certsData } = await supabaseAdmin
@@ -504,9 +574,7 @@ router.post("/batches/:batchId/sync", async (req, res) => {
     const visualFields = Object.values(batch.column_map || {}) as string[];
     const now = new Date().toISOString();
 
-    for (const row of dataRows) {
-      const rowData: Record<string, string> = {};
-      headers.forEach((h, i) => { rowData[h] = (row[i] as string) || ""; });
+    for (const rowData of dataRows) {
 
       const email = rowData[emailColumn] || "";
       const name = rowData[nameColumn] || "Unknown";
@@ -801,7 +869,9 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", requireAppro
     }
     var3 = var3.replace(/<<EmailPrefix>>/gi, emailPrefix);
 
-    const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    const safePdfName = (cert.recipientName || "cert").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "cert";
+    const safePdfBatch = (batch.name || "batch").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "batch";
+    const pdfFilename = `${safePdfName}_${safePdfBatch}.pdf`;
     const wamid = await sendWhatsAppDocument(phone, cert.r2PdfUrl, pdfFilename, var1, var2, var3);
     await supabaseAdmin.from("certificates").update({
       status: "sent",

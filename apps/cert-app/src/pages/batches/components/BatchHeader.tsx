@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { LockedFeature } from "@/components/LockedFeature";
 import { useApproval } from "@/hooks/use-approval";
 import { Play, Send, Loader2, Share2, MessageCircle, RefreshCcw, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Table2 } from "lucide-react";
 import { format } from "date-fns";
 import { FileText } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface Props {
   batch: any;
@@ -38,6 +39,29 @@ export function BatchHeader({
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { isApproved } = useApproval();
+  const [, setLocation] = useLocation();
+
+  const isInbuilt = batch.dataSourceKind === "inbuilt";
+
+  function EditSheetButton({ className }: { className?: string }) {
+    if (isInbuilt) {
+      return (
+        <Button variant="outline" size="sm" className={`hover-elevate bg-background ${className ?? ""}`}
+          onClick={() => setLocation(`/spreadsheets/${batch.spreadsheetId}`)}>
+          <Table2 className="w-4 h-4 mr-1.5 text-blue-600" />
+          Edit Sheet
+        </Button>
+      );
+    }
+    return (
+      <Button variant="outline" size="sm" asChild className={`hover-elevate bg-background ${className ?? ""}`} title="Edit Google Sheet">
+        <a href={`https://docs.google.com/spreadsheets/d/${batch.sheetId}/edit`} target="_blank" rel="noopener noreferrer">
+          <FileSpreadsheet className="w-4 h-4 mr-1.5 text-green-600" />
+          Edit Sheet
+        </a>
+      </Button>
+    );
+  }
 
   const generateDisabled = isGenerating || batch.status === 'generating' || (!canResumeAll && selectedCertIds.length === 0);
   const sendDisabled = isSending || batch.status === 'sending' || batch.generatedCount === 0;
@@ -60,7 +84,10 @@ export function BatchHeader({
         <p className="text-muted-foreground flex items-center gap-2 text-sm flex-wrap">
           <span>Created {format(new Date(batch.createdAt), 'MMM d, yyyy')}</span>
           <span className="hidden sm:inline">•</span>
-          <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {batch.sheetName}</span>
+          <span className="flex items-center gap-1">
+            {isInbuilt ? <Table2 className="w-3.5 h-3.5 text-blue-500" /> : <FileText className="w-3.5 h-3.5" />}
+            {isInbuilt ? (batch.sheetName || "Inbuilt Spreadsheet") : batch.sheetName}
+          </span>
         </p>
       </div>
 
@@ -118,12 +145,7 @@ export function BatchHeader({
         {/* Mobile: expandable secondary actions */}
         {moreOpen && (
           <div className="grid grid-cols-2 gap-2 md:hidden p-3 bg-secondary/40 rounded-xl border border-border/50">
-            <Button variant="outline" size="sm" asChild className="hover-elevate bg-background w-full justify-start">
-              <a href={`https://docs.google.com/spreadsheets/d/${batch.sheetId}/edit`} target="_blank" rel="noopener noreferrer">
-                <FileSpreadsheet className="w-4 h-4 mr-1.5 text-green-600" />
-                Edit Sheet
-              </a>
-            </Button>
+            <EditSheetButton className="w-full justify-start" />
             <Button variant="outline" size="sm" onClick={onSync} disabled={isSyncing || batch.status === 'generating'} className="hover-elevate bg-background w-full justify-start">
               {isSyncing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCcw className="w-4 h-4 mr-1.5" />}
               Sync Data
@@ -158,55 +180,58 @@ export function BatchHeader({
           </div>
         )}
 
-        {/* Desktop: full button row (unchanged) */}
-        <div className="hidden md:flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" asChild className="hover-elevate bg-background" title="Edit Google Sheet">
-            <a href={`https://docs.google.com/spreadsheets/d/${batch.sheetId}/edit`} target="_blank" rel="noopener noreferrer">
-              <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
-              Edit Sheet
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" onClick={onSync} disabled={isSyncing || batch.status === 'generating'} className="hover-elevate bg-background" title="Pull latest data from Google Sheet">
-            {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
+        {/* Desktop: single compact row */}
+        <div className="hidden md:flex items-center gap-1.5 flex-wrap">
+          {/* Data group */}
+          <EditSheetButton />
+          <Button variant="outline" size="sm" onClick={onSync} disabled={isSyncing || batch.status === 'generating'} className="hover-elevate bg-background">
+            {isSyncing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />}
             Sync Data
           </Button>
+
+          <div className="w-px h-5 bg-border mx-0.5" />
+
+          {/* Output group */}
           <Button variant="outline" size="sm" onClick={onShare} disabled={isSharing || batch.generatedCount === 0} className="hover-elevate bg-background">
-            {isSharing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Share2 className="w-4 h-4 mr-2" />}
+            {isSharing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5 mr-1.5" />}
             Share PDFs
           </Button>
           <LockedFeature feature="custom event banners" inline>
             <Button variant="outline" size="sm" onClick={onBannerEdit} disabled={bannerUploading} className="hover-elevate bg-background">
-              {bannerUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
+              {bannerUploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Eye className="w-3.5 h-3.5 mr-1.5" />}
               {batch.bannerUrl ? "Edit Banner" : "Add Banner"}
             </Button>
           </LockedFeature>
-          <div className="relative flex items-center gap-1">
-            <Button
-              variant="outline" size="sm"
-              onClick={onGenerate}
-              disabled={generateDisabled}
-              className="hover-elevate bg-background relative"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+
+          <div className="w-px h-5 bg-border mx-0.5" />
+
+          {/* Generate group */}
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={onGenerate} disabled={generateDisabled} className="hover-elevate bg-background">
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
               {isGenerating ? 'Generating...' : generateBtnText}
             </Button>
             {isGenerating && (
-              <Button variant="ghost" size="sm" onClick={onCancelGeneration} className="px-2" title="Cancel generation">
-                <X className="w-4 h-4" />
+              <Button variant="ghost" size="sm" onClick={onCancelGeneration} className="px-1.5" title="Cancel">
+                <X className="w-3.5 h-3.5" />
               </Button>
             )}
-            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
-              Generation Limit: {generationLimit.toLocaleString()}
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              Limit: {generationLimit.toLocaleString()}
             </span>
           </div>
-          <Button onClick={onOpenSend} disabled={sendDisabled} className="hover-elevate">
-            {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+
+          <div className="w-px h-5 bg-border mx-0.5" />
+
+          {/* Send group */}
+          <Button size="sm" onClick={onOpenSend} disabled={sendDisabled} className="hover-elevate">
+            {isSending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
             Send Emails
           </Button>
           <LockedFeature feature="WhatsApp delivery" inline>
-            <Button variant="outline" onClick={onOpenWa} disabled={isSendingWhatsapp || batch.status === 'sending' || batch.generatedCount === 0} className="hover-elevate bg-background">
-              {isSendingWhatsapp ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <MessageCircle className="w-4 h-4 mr-2" />}
-              Send via WhatsApp
+            <Button variant="outline" size="sm" onClick={onOpenWa} disabled={isSendingWhatsapp || batch.status === 'sending' || batch.generatedCount === 0} className="hover-elevate bg-background">
+              {isSendingWhatsapp ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5 mr-1.5" />}
+              WhatsApp
             </Button>
           </LockedFeature>
         </div>

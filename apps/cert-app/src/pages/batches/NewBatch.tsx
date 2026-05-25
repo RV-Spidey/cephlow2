@@ -13,6 +13,7 @@ import {
   customFetch,
   useListBuiltinTemplates,
   useGetBuiltinTemplate,
+  useGetSpreadsheet,
 } from "@workspace/api-client-react";
 import { useGooglePicker } from "@/hooks/use-google-picker";
 import { Card } from "@/components/ui/card";
@@ -51,6 +52,9 @@ export default function NewBatchWizard() {
   const [sheetId, setSheetId] = useState("");
   const [sheetName, setSheetName] = useState("");
   const [tabName, setTabName] = useState("");
+  const [dataSourceKind, setDataSourceKind] = useState<"google" | "inbuilt">("google");
+  const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [spreadsheetName, setSpreadsheetName] = useState("");
 
   const { recheckGoogleAuth, hasGoogleAuth, connectGoogle } = useAuth();
   const { isApproved } = useApproval();
@@ -113,12 +117,26 @@ export default function NewBatchWizard() {
     }
   };
 
-  const { data: sheetData, isLoading: sheetDataLoading } = useGetSheetData(sheetId, { tabName }, { query: { enabled: !!sheetId } as any });
-  const sheetHeaders = sheetData?.headers ?? [];
+  const { data: sheetData, isLoading: sheetDataLoading } = useGetSheetData(sheetId, { tabName }, { query: { enabled: dataSourceKind === "google" && !!sheetId } as any });
+  const { data: inbuiltSheetData, isLoading: inbuiltSheetLoading } = useGetSpreadsheet(spreadsheetId, {
+    query: { enabled: dataSourceKind === "inbuilt" && !!spreadsheetId } as any,
+  });
+
+  const sheetHeaders: string[] =
+    dataSourceKind === "inbuilt"
+      ? inbuiltSheetData?.columns ?? []
+      : sheetData?.headers ?? [];
+
+  const resolvedSheetDataLoading = dataSourceKind === "inbuilt" ? inbuiltSheetLoading : sheetDataLoading;
 
   const uniqueCategories = (() => {
-    if (!categoryColumn || !sheetData?.rows) return [] as string[];
-    const values = (sheetData.rows as Record<string, string>[]).map(r => r[categoryColumn]).filter(Boolean);
+    if (!categoryColumn) return [] as string[];
+    const rows: Record<string, string>[] =
+      dataSourceKind === "inbuilt"
+        ? inbuiltSheetData?.rows ?? []
+        : (sheetData?.rows as Record<string, string>[]) ?? [];
+    if (!rows.length) return [] as string[];
+    const values = rows.map(r => r[categoryColumn]).filter(Boolean);
     return [...new Set(values)] as string[];
   })();
 
@@ -161,9 +179,11 @@ export default function NewBatchWizard() {
       const batch = await createBatchAsync({
         data: {
           name,
-          sheetId,
-          sheetName,
-          tabName,
+          sheetId: dataSourceKind === "google" ? sheetId : undefined,
+          sheetName: dataSourceKind === "google" ? sheetName : undefined,
+          tabName: dataSourceKind === "google" ? tabName : undefined,
+          spreadsheetId: dataSourceKind === "inbuilt" ? spreadsheetId : undefined,
+          dataSourceKind,
           templateId,
           templateName,
           templateKind,
@@ -209,7 +229,7 @@ export default function NewBatchWizard() {
 
   const isNextDisabled = () => {
     if (step === 0) return !name;
-    if (step === 1) return !sheetId;
+    if (step === 1) return dataSourceKind === "inbuilt" ? !spreadsheetId : !sheetId;
     if (step === 2) {
       if (!templateId) return true;
       if (multiTemplateMode && !categoryColumn) return true;
@@ -282,6 +302,11 @@ export default function NewBatchWizard() {
                   sheetName={sheetName}
                   pickerLoading={pickerLoading}
                   onPickSheet={handlePickSheet}
+                  dataSourceKind={dataSourceKind}
+                  onDataSourceKindChange={setDataSourceKind}
+                  spreadsheetId={spreadsheetId}
+                  spreadsheetName={spreadsheetName}
+                  onPickSpreadsheet={(id, sname) => { setSpreadsheetId(id); setSpreadsheetName(sname); }}
                 />
               )}
               {step === 2 && (
@@ -312,7 +337,7 @@ export default function NewBatchWizard() {
               )}
               {step === 3 && (
                 <StepMapData
-                  sheetDataLoading={sheetDataLoading}
+                  sheetDataLoading={resolvedSheetDataLoading}
                   placeholdersLoading={placeholdersLoading}
                   sheetHeaders={sheetHeaders}
                   placeholders={placeholders}
