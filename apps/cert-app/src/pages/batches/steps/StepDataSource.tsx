@@ -5,7 +5,7 @@ import { useListSpreadsheets } from "@workspace/api-client-react";
 
 interface Props {
   hasGoogleAuth: boolean;
-  connectGoogle: () => void;
+  connectGoogle: (scope?: "drive" | "sheets" | "slides") => void;
   sheetId: string;
   sheetName: string;
   pickerLoading: "sheet" | "presentation" | null;
@@ -47,11 +47,11 @@ export function StepDataSource({
 
       <Tabs value={dataSourceKind} onValueChange={(v) => onDataSourceKindChange(v as "google" | "inbuilt")}>
         <TabsList className="mb-4">
-          <TabsTrigger value="google" className="gap-1.5">
-            <FileSpreadsheet className="w-4 h-4" /> Google Sheets
-          </TabsTrigger>
           <TabsTrigger value="inbuilt" className="gap-1.5">
             <Table2 className="w-4 h-4" /> Inbuilt Spreadsheet
+          </TabsTrigger>
+          <TabsTrigger value="google" className="gap-1.5">
+            <FileSpreadsheet className="w-4 h-4" /> Google Sheets
           </TabsTrigger>
         </TabsList>
 
@@ -66,8 +66,8 @@ export function StepDataSource({
                   Connect your Google account to access your spreadsheets.
                 </p>
               </div>
-              <Button onClick={connectGoogle} className="mt-2">
-                Connect Google Account
+              <Button onClick={() => connectGoogle("sheets")} className="mt-2">
+                Connect Google Sheets
               </Button>
             </div>
           ) : (

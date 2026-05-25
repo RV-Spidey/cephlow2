@@ -30,7 +30,7 @@ export default function Dashboard() {
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg" variant="outline" className="border-2 border-background/40 text-background bg-transparent hover:bg-background/10 font-bold uppercase tracking-widest text-xs px-6 h-11">
-              <Link href="/templates/new">
+              <Link href="/templates">
                 <Sparkles className="mr-2 w-4 h-4" />
                 New Template
               </Link>

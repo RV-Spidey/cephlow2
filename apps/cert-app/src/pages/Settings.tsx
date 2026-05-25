@@ -15,7 +15,7 @@ import { type Theme, THEME_LABELS, useThemePreference } from "@/hooks/use-theme"
 import { updatePassword, updateUserProfile } from "@/lib/supabase";
 
 export default function Settings() {
-  const { user, hasGoogleAuth, connectGoogle, disconnectGoogle, recheckGoogleAuth } = useAuth();
+  const { user, googleAuthStatus, connectGoogle, disconnectGoogle, recheckGoogleAuth } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -117,25 +117,27 @@ export default function Settings() {
   }
 
   // ── Google account ────────────────────────────────────────────────────────────
-  const handleDisconnect = async () => {
-    setLoading(true);
+  const [scopeLoading, setScopeLoading] = useState<string | null>(null);
+
+  const handleConnect = async (scope: "drive" | "sheets" | "slides") => {
+    setScopeLoading(scope);
     try {
-      await disconnectGoogle();
-      toast({ title: "Google account disconnected" });
+      await connectGoogle(scope);
     } catch (err: any) {
-      toast({ title: "Failed to disconnect", description: err?.message || "Unknown error", variant: "destructive" });
-    } finally {
-      setLoading(false);
+      toast({ title: "Failed to connect", description: err?.message || "Unknown error", variant: "destructive" });
+      setScopeLoading(null);
     }
   };
 
-  const handleConnect = async () => {
-    setLoading(true);
+  const handleDisconnect = async (scope: "drive" | "sheets" | "slides") => {
+    setScopeLoading(scope);
     try {
-      await connectGoogle();
+      await disconnectGoogle(scope);
+      toast({ title: "Google connection removed" });
     } catch (err: any) {
-      toast({ title: "Failed to connect", description: err?.message || "Unknown error", variant: "destructive" });
-      setLoading(false);
+      toast({ title: "Failed to disconnect", description: err?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setScopeLoading(null);
     }
   };
 
@@ -283,35 +285,58 @@ export default function Settings() {
             Google Account
           </span>
         </div>
-        <div className="px-5 py-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide mb-1">
-              {hasGoogleAuth ? "Connected" : "Not Connected"}
-            </p>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {hasGoogleAuth
-                ? "Your Google account is linked. Cephlow can access Sheets, Slides, and Drive on your behalf."
-                : "Connect your Google account to enable certificate generation and delivery."}
-            </p>
-          </div>
-          {hasGoogleAuth ? (
-            <button
-              onClick={handleDisconnect}
-              disabled={loading}
-              className="shrink-0 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-destructive hover:text-destructive transition-colors whitespace-nowrap disabled:opacity-50"
+
+        {([
+          {
+            scope: "drive" as const,
+            label: "Google Drive",
+            description: "PDF uploads and folder creation.",
+          },
+          {
+            scope: "sheets" as const,
+            label: "Google Sheets",
+            description: "Use Google Sheets as a data source for batches.",
+          },
+          {
+            scope: "slides" as const,
+            label: "Google Slides",
+            description: "Use Google Slides as certificate templates.",
+          },
+        ]).map(({ scope, label, description }, i, arr) => {
+          const connected = googleAuthStatus[scope];
+          const busy = scopeLoading === scope;
+          return (
+            <div
+              key={scope}
+              className={`px-5 py-4 flex items-center justify-between gap-4${i < arr.length - 1 ? " border-b-2 border-border" : ""}`}
             >
-              {loading ? "..." : "Disconnect"}
-            </button>
-          ) : (
-            <button
-              onClick={handleConnect}
-              disabled={loading}
-              className="shrink-0 px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50"
-            >
-              {loading ? "..." : "Connect"}
-            </button>
-          )}
-        </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${connected ? "bg-green-500" : "bg-muted-foreground/30"}`} />
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide">{label}</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
+                </div>
+              </div>
+              {connected ? (
+                <button
+                  onClick={() => handleDisconnect(scope)}
+                  disabled={!!scopeLoading}
+                  className="shrink-0 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-destructive hover:text-destructive transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {busy ? "..." : "Disconnect"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleConnect(scope)}
+                  disabled={!!scopeLoading}
+                  className="shrink-0 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border-2 border-border hover:border-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {busy ? "..." : "Connect"}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       {/* ── Click Sound ─────────────────────────────────────────────────────────── */}

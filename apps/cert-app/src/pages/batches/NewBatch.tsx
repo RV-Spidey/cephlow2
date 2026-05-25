@@ -46,25 +46,22 @@ export default function NewBatchWizard() {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [bannerPreviewUrl, setBannerPreviewUrl] = useState("");
 
   const [sheetId, setSheetId] = useState("");
   const [sheetName, setSheetName] = useState("");
   const [tabName, setTabName] = useState("");
-  const [dataSourceKind, setDataSourceKind] = useState<"google" | "inbuilt">("google");
+  const [dataSourceKind, setDataSourceKind] = useState<"google" | "inbuilt">("inbuilt");
   const [spreadsheetId, setSpreadsheetId] = useState("");
   const [spreadsheetName, setSpreadsheetName] = useState("");
 
-  const { recheckGoogleAuth, hasGoogleAuth, connectGoogle } = useAuth();
+  const { recheckGoogleAuth, googleAuthStatus, connectGoogle } = useAuth();
+  const hasGoogleAuth = googleAuthStatus.sheets;
   const { isApproved } = useApproval();
   const slidesGuard = useLockedFeatureGuard("Google Slides templates");
 
   const [templateId, setTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
-  const [templateKind, setTemplateKind] = useState<"slides" | "builtin">(
-    isApproved ? "slides" : "builtin",
-  );
+  const [templateKind, setTemplateKind] = useState<"slides" | "builtin">("builtin");
 
   useEffect(() => {
     if (!isApproved && templateKind === "slides") {
@@ -83,7 +80,6 @@ export default function NewBatchWizard() {
   const [emailColumn, setEmailColumn] = useState("");
   const [nameColumn, setNameColumn] = useState("");
 
-  const [frameTier, setFrameTier] = useState("none");
 
   const [emailSubject, setEmailSubject] = useState("Your Certificate is ready!");
   const [emailBody, setEmailBody] = useState("Hi ,\n\nHere is your certificate attached.\n\nBest,\nThe Team");
@@ -122,9 +118,10 @@ export default function NewBatchWizard() {
     query: { enabled: dataSourceKind === "inbuilt" && !!spreadsheetId } as any,
   });
 
+  const inbuiltSheet = inbuiltSheetData as any;
   const sheetHeaders: string[] =
     dataSourceKind === "inbuilt"
-      ? inbuiltSheetData?.columns ?? []
+      ? inbuiltSheet?.columns ?? []
       : sheetData?.headers ?? [];
 
   const resolvedSheetDataLoading = dataSourceKind === "inbuilt" ? inbuiltSheetLoading : sheetDataLoading;
@@ -133,7 +130,7 @@ export default function NewBatchWizard() {
     if (!categoryColumn) return [] as string[];
     const rows: Record<string, string>[] =
       dataSourceKind === "inbuilt"
-        ? inbuiltSheetData?.rows ?? []
+        ? inbuiltSheet?.rows ?? []
         : (sheetData?.rows as Record<string, string>[]) ?? [];
     if (!rows.length) return [] as string[];
     const values = rows.map(r => r[categoryColumn]).filter(Boolean);
@@ -193,21 +190,10 @@ export default function NewBatchWizard() {
           emailSubject,
           emailBody,
           ...(multiTemplateMode && categoryColumn ? { categoryColumn, categorySlideMap: finalSlideMap } : {}),
-          frameTier,
         } as any,
       });
 
       queryClient.invalidateQueries({ queryKey: getListBatchesQueryKey() });
-
-      if (bannerFile) {
-        try {
-          await customFetch(`/api/batches/${batch.id}/banner`, {
-            method: "POST",
-            headers: { "Content-Type": bannerFile.type },
-            body: bannerFile,
-          });
-        } catch { /* non-fatal */ }
-      }
 
       toast({ title: "Batch created!" });
       setLocation(`/batches/${batch.id}`);
@@ -286,12 +272,6 @@ export default function NewBatchWizard() {
                 <StepName
                   name={name}
                   onNameChange={setName}
-                  bannerFile={bannerFile}
-                  bannerPreviewUrl={bannerPreviewUrl}
-                  onBannerFileChange={(file) => { setBannerFile(file); setBannerPreviewUrl(URL.createObjectURL(file)); }}
-                  onBannerClear={() => { setBannerFile(null); setBannerPreviewUrl(""); }}
-                  frameTier={frameTier}
-                  onFrameTierChange={setFrameTier}
                 />
               )}
               {step === 1 && (

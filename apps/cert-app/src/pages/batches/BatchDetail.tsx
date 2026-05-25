@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { useClientGenerate } from "@/hooks/useClientGenerate";
 import { useApproval } from "@/hooks/use-approval";
+import { useAuth } from "@/hooks/use-auth";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBatch,
@@ -37,6 +39,8 @@ export default function BatchDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { isApproved } = useApproval();
+  const { connectGoogle } = useAuth();
+  const [showConnectDriveDialog, setShowConnectDriveDialog] = useState(false);
 
   const { data: batch, isLoading, error: batchError, refetch } = useGetBatch(batchId as any, {
     query: {
@@ -111,7 +115,13 @@ export default function BatchDetail() {
           )
         });
       },
-      onError: (err: any) => toast({ title: "Sharing failed", description: err.message, variant: "destructive" })
+      onError: (err: any) => {
+        if (err?.message?.includes("not connected") || err?.data?.code === "GOOGLE_NOT_CONNECTED") {
+          setShowConnectDriveDialog(true);
+        } else {
+          toast({ title: "Sharing failed", description: err.message, variant: "destructive" });
+        }
+      }
     }
   });
 
@@ -405,6 +415,23 @@ export default function BatchDetail() {
         onClose={() => setActiveReport(null)}
         getCertKey={getCertKey}
       />
+
+      <AlertDialog open={showConnectDriveDialog} onOpenChange={setShowConnectDriveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Google Drive Not Connected</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sharing PDFs requires Google Drive access. Connect your Google Drive to upload and share the certificate folder.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowConnectDriveDialog(false); connectGoogle("drive"); }}>
+              Connect Google Drive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

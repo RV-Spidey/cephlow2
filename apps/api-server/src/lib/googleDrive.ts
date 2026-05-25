@@ -5,12 +5,12 @@ import { getAuthClientForUser } from "./googleAuth.js";
 import { uploadBufferToR2, getR2PublicUrl, isR2Configured, deleteR2Objects } from "./cloudflareR2.js";
 
 export async function getDriveClient(uid: string) {
-  const auth = await getAuthClientForUser(uid);
+  const auth = await getAuthClientForUser(uid, "drive");
   return google.drive({ version: "v3", auth });
 }
 
 async function getSlidesClient(uid: string) {
-  const auth = await getAuthClientForUser(uid);
+  const auth = await getAuthClientForUser(uid, "slides");
   return google.slides({ version: "v1", auth });
 }
 

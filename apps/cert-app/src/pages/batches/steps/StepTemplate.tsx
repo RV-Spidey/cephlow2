@@ -53,16 +53,16 @@ export function StepTemplate({
       {/* Source kind toggle */}
       <div className="flex gap-3">
         <button
-          onClick={slidesGuard.guard(() => { onTemplateKindChange("slides"); onTemplateSelect("", ""); onCategorySlideMapChange({}); })}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${templateKind === "slides" ? "border-primary bg-primary/5 text-foreground" : "border-border/50 text-muted-foreground hover:border-primary/30"} ${!slidesGuard.isApproved ? "opacity-60" : ""}`}
-        >
-          <Presentation className="w-4 h-4" /> Google Slides {!slidesGuard.isApproved && "🔒"}
-        </button>
-        <button
           onClick={() => { onTemplateKindChange("builtin"); onTemplateSelect("", ""); onMultiTemplateModeChange(false); onCategorySlideMapChange({}); }}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${templateKind === "builtin" ? "border-primary bg-primary/5 text-foreground" : "border-border/50 text-muted-foreground hover:border-primary/30"}`}
         >
           <PenTool className="w-4 h-4" /> Builtin Editor
+        </button>
+        <button
+          onClick={slidesGuard.guard(() => { onTemplateKindChange("slides"); onTemplateSelect("", ""); onCategorySlideMapChange({}); })}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${templateKind === "slides" ? "border-primary bg-primary/5 text-foreground" : "border-border/50 text-muted-foreground hover:border-primary/30"} ${!slidesGuard.isApproved ? "opacity-60" : ""}`}
+        >
+          <Presentation className="w-4 h-4" /> Google Slides {!slidesGuard.isApproved && "🔒"}
         </button>
       </div>
       {slidesGuard.modal}
