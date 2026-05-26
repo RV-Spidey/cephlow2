@@ -206,8 +206,8 @@ export function BatchHeader({
           <div className="w-px h-5 bg-border mx-0.5" />
 
           {/* Generate group */}
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="outline" onClick={onGenerate} disabled={generateDisabled} className="hover-elevate bg-background">
+          <div className="flex items-center gap-1 min-w-[240px]">
+            <Button size="sm" variant="outline" onClick={onGenerate} disabled={generateDisabled} className="hover-elevate bg-background min-w-[148px] justify-start">
               {isGenerating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1.5" />}
               {isGenerating ? 'Generating...' : generateBtnText}
             </Button>

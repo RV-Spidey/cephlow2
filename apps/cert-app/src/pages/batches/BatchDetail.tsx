@@ -175,7 +175,7 @@ export default function BatchDetail() {
   const canResumeAll = selectedCertIds.length === 0 && pendingCount > 0;
 
   const generateBtnText = selectedCertIds.length > 0
-    ? (unpaidCount > 0 ? `Generate Selected (${selectedCertIds.length})` : `Regenerate Selected (${selectedCertIds.length})`)
+    ? (unpaidCount > 0 ? `Generate Selected (${selectedCertIds.length})` : `Regenerate (${selectedCertIds.length})`)
     : batch?.status === "partial"
       ? `Resume (${pendingCount} remaining)`
       : `Generate All (${pendingCount})`;
