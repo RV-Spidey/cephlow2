@@ -872,7 +872,13 @@ router.post("/batches/:batchId/certificates/:certId/send-whatsapp", requireAppro
     const safePdfName = (cert.recipientName || "cert").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "cert";
     const safePdfBatch = (batch.name || "batch").trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "batch";
     const pdfFilename = `${safePdfName}_${safePdfBatch}.pdf`;
-    const wamid = await sendWhatsAppDocument(phone, cert.r2PdfUrl, pdfFilename, var1, var2, var3);
+
+    const r2Base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
+    const certKey = r2Base && cert.r2PdfUrl?.startsWith(r2Base)
+      ? decodeURIComponent(cert.r2PdfUrl.slice(r2Base.length + 1))
+      : undefined;
+
+    const wamid = await sendWhatsAppDocument(phone, cert.r2PdfUrl, pdfFilename, var1, var2, var3, certKey);
     await supabaseAdmin.from("certificates").update({
       status: "sent",
       sent_at: new Date().toISOString(),

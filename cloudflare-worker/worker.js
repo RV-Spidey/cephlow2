@@ -94,17 +94,21 @@ export default {
 
     const phone = value?.contacts?.[0]?.wa_id || msg.from;
 
-    // Extract action from interactive reply or plain text
-    const listId   = msg?.interactive?.list_reply?.id;
-    const btnId    = msg?.interactive?.button_reply?.id;
-    const text     = msg?.text?.body?.trim();
-    let   action   = listId || btnId || text || 'greet';
+    // Extract action from interactive reply, template button reply, or plain text.
+    // Template quick-reply responses come in as msg.type === 'button' (not 'interactive').
+    const listId            = msg?.interactive?.list_reply?.id;
+    const btnId             = msg?.interactive?.button_reply?.id;
+    const templateBtnPayload = msg?.type === 'button' ? msg?.button?.payload : null;
+    const text              = msg?.text?.body?.trim();
+    let   action            = listId || btnId || templateBtnPayload || text || 'greet';
 
     // Normalize common text inputs
     const t = String(action).toLowerCase();
-    if (t === 'hi' || t === 'hello' || t === 'hey') action = 'greet';
-    if (t.includes('send all'))                      action = 'send_all';
-    if (t.includes('search'))                        action = 'search_cert';
+    if (t === 'hi' || t === 'hello' || t === 'hey')      action = 'greet';
+    if (t.includes('send all'))                           action = 'send_all';
+    if (t.includes('search'))                             action = 'search_cert';
+    // Fallback: if template was sent without a cert key payload, still route to report flow
+    if (t === 'report certificate issue' || t === 'report_certificate_issue') action = 'report_issue';
 
     // Search both the full E.164 number (with country code) and the bare number
     const folderVariants = getFolderVariants(phone);
@@ -133,6 +137,20 @@ export default {
             .catch((err) => console.error('WA→TG forward failed:', err))
         );
         ctx.waitUntil(logInteraction(env, { phone, action: 'support_message' }));
+        return new Response('OK');
+      }
+
+      // Student tapped "Report Certificate issue" on a template message that
+      // carried the cert key in the button payload — skip the selection list.
+      if (action.startsWith('report:')) {
+        const certKey  = action.slice('report:'.length);
+        const certName = certKey.split('/').pop();
+        await setUserState(phone, `report_desc:${certKey}`, env);
+        await waPost({
+          to: phone, type: 'text',
+          text: { body: `📝 Please describe your issue with *${certName}*:\n\n(e.g. wrong name, wrong date, blurry image)` }
+        }, env);
+        ctx.waitUntil(logInteraction(env, { phone, action: 'report_issue', detail: certKey }));
         return new Response('OK');
       }
 

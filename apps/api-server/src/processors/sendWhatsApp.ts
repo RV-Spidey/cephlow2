@@ -53,7 +53,18 @@ export async function processSendWhatsApp(payload: SendWhatsAppJobData) {
         var3 = var3.replace(/<<EmailPrefix>>/gi, emailPrefix);
 
         const pdfFilename = `${cert.recipientName.replace(/[^a-zA-Z0-9]/g, "_")}_${batch.name.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
-        const wamid = await sendWhatsAppDocument(phone, (cert as any).r2PdfUrl, pdfFilename, var1, var2, var3);
+
+        // Extract the R2 object key from the stored public URL so the worker
+        // can embed it in the quick-reply button payload.
+        const r2Base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "") ?? "";
+        const r2PdfUrl: string = (cert as any).r2PdfUrl ?? "";
+        const certKey = r2Base && r2PdfUrl.startsWith(r2Base)
+          ? decodeURIComponent(r2PdfUrl.slice(r2Base.length + 1))
+          : undefined;
+
+        console.log(`[WhatsApp] certKey="${certKey}" r2Base="${r2Base}" r2PdfUrl="${r2PdfUrl}"`);
+
+        const wamid = await sendWhatsAppDocument(phone, r2PdfUrl, pdfFilename, var1, var2, var3, certKey);
 
         await supabaseAdmin.from("certificates").update({
           status: "sent",
