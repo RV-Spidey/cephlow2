@@ -1,5 +1,8 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# Claude Code worktrees (nested git repos — must never be tracked)
+.claude/worktrees/
+
 # compiled output
 dist
 tmp
@@ -51,3 +54,10 @@ Thumbs.db
 
 # Firebase service account key
 firebase-service-account.json
+
+# Wrangler local cache
+.wrangler/
+
+#graphify
+graphify-out/manifest.json  
+graphify-out/cost.json        

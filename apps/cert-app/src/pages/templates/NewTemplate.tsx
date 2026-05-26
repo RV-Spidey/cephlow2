@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLockedFeatureGuard } from "@/components/LockedFeature";
 import { useMutation } from "@tanstack/react-query";
 import {
   useCreateSlideTemplate,
   useGetSlidePlaceholders,
   useCreateSheet,
-  useListSlideTemplates,
   customFetch,
 } from "@workspace/api-client-react";
+import { useGooglePicker } from "@/hooks/use-google-picker";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +28,11 @@ import {
   SkipForward,
   Layers,
   Upload,
+  PenTool,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { supabase } from "@/lib/supabase";
 
 const STEPS = [
@@ -46,11 +49,13 @@ export default function NewTemplate() {
   const [step, setStep] = useState(0);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const slidesGuard = useLockedFeatureGuard("Google Slides templates");
 
   const [templateName, setTemplateName] = useState("");
   const [multiTemplate, setMultiTemplate] = useState(false);
-  const [sourceMode, setSourceMode] = useState<"new" | "existing" | "upload">("new");
+  const [sourceMode, setSourceMode] = useState<"new" | "existing" | "upload" | "builtin">("new");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [selectedTemplateName, setSelectedTemplateName] = useState("");
   const [createdTemplate, setCreatedTemplate] = useState<CreatedFile | null>(null);
   const [createdSheet, setCreatedSheet] = useState<CreatedFile | null>(null);
   const [authToken, setAuthToken] = useState<string>("");
@@ -65,7 +70,8 @@ export default function NewTemplate() {
     });
   }, []);
 
-  const { data: templatesRes, isLoading: templatesLoading } = useListSlideTemplates();
+  const { openPicker } = useGooglePicker();
+  const [templatePickerLoading, setTemplatePickerLoading] = useState(false);
 
   const extractSlideId = (input: string) => {
     const match = input.match(/\/presentation\/d\/([a-zA-Z0-9-_]+)/);
@@ -80,6 +86,16 @@ export default function NewTemplate() {
         window.open(data.url, "_blank");
       },
       onError: (err: any) => {
+        const isGoogleError = err.message?.toLowerCase().includes("google account not connected") || err?.data?.code === "GOOGLE_NOT_CONNECTED";
+        if (isGoogleError) {
+          toast({
+            title: "Google account not connected",
+            description: "Connect your Google account in Settings to continue.",
+            variant: "destructive",
+            action: <ToastAction altText="Go to Settings" onClick={() => setLocation("/settings")}>Go to Settings</ToastAction>,
+          });
+          return;
+        }
         toast({ title: "Failed to create presentation", description: err.message, variant: "destructive" });
       },
     },
@@ -207,37 +223,37 @@ export default function NewTemplate() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-8">
-      <div className="mb-10">
-        <h1 className="text-3xl font-display font-bold mb-2">Create New Template</h1>
-        <p className="text-muted-foreground">
+    <div className="max-w-2xl mx-auto px-4 sm:px-0 py-6 sm:py-8">
+      <div className="mb-6 sm:mb-10">
+        <h1 className="text-2xl sm:text-3xl font-display font-bold mb-2">Create New Template</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
           Build a Slides template with placeholders, then generate a matching spreadsheet automatically.
         </p>
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-1.5 mb-6 sm:mb-8 overflow-x-auto pb-1">
         {STEPS.map((label, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="flex items-center gap-1.5 shrink-0">
             <div
-              className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-colors ${i < step
+              className={`flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full text-xs font-bold transition-colors ${i < step
                   ? "bg-primary text-primary-foreground"
                   : i === step
                     ? "bg-primary/15 text-primary ring-2 ring-primary"
                     : "bg-secondary text-muted-foreground"
                 }`}
             >
-              {i < step ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+              {i < step ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
             </div>
             {i < STEPS.length - 1 && (
               <div
-                className={`h-0.5 w-8 rounded-full transition-colors ${i < step ? "bg-primary" : "bg-secondary"
+                className={`h-0.5 w-4 sm:w-8 rounded-full transition-colors ${i < step ? "bg-primary" : "bg-secondary"
                   }`}
               />
             )}
           </div>
         ))}
-        <span className="ml-3 text-sm font-medium text-muted-foreground">{STEPS[step]}</span>
+        <span className="ml-2 text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">{STEPS[step]}</span>
       </div>
 
       <Card className="overflow-hidden shadow-sm border-border/60">
@@ -252,7 +268,7 @@ export default function NewTemplate() {
           >
             {/* Step 0 – Name */}
             {step === 0 && (
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-8 space-y-5 sm:space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 p-3 rounded-2xl">
                     <Presentation className="w-6 h-6" />
@@ -266,36 +282,46 @@ export default function NewTemplate() {
                 </div>
 
                 {/* Source Mode Toggle */}
-                <div className="flex p-1 bg-secondary/50 rounded-xl">
+                <div className="grid grid-cols-2 sm:grid-cols-4 p-1 bg-secondary/50 rounded-xl gap-1">
                   <button
-                    onClick={() => setSourceMode("new")}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+                    onClick={slidesGuard.guard(() => setSourceMode("new"))}
+                    className={`py-2 px-1 text-xs sm:text-sm font-medium rounded-lg transition-all leading-tight ${
                       sourceMode === "new"
                         ? "bg-background shadow-sm text-foreground"
                         : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    } ${!slidesGuard.isApproved ? "opacity-50" : ""}`}
                   >
-                    Create New
+                    Google Slides {!slidesGuard.isApproved && "🔒"}
                   </button>
                   <button
-                    onClick={() => setSourceMode("existing")}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+                    onClick={slidesGuard.guard(() => setSourceMode("existing"))}
+                    className={`py-2 px-1 text-xs sm:text-sm font-medium rounded-lg transition-all leading-tight ${
                       sourceMode === "existing"
                         ? "bg-background shadow-sm text-foreground"
                         : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    } ${!slidesGuard.isApproved ? "opacity-50" : ""}`}
                   >
-                    Use Existing
+                    Use Existing {!slidesGuard.isApproved && "🔒"}
                   </button>
                   <button
-                    onClick={() => setSourceMode("upload")}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+                    onClick={slidesGuard.guard(() => setSourceMode("upload"))}
+                    className={`py-2 px-1 text-xs sm:text-sm font-medium rounded-lg transition-all leading-tight ${
                       sourceMode === "upload"
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    } ${!slidesGuard.isApproved ? "opacity-50" : ""}`}
+                  >
+                    Upload PPTX {!slidesGuard.isApproved && "🔒"}
+                  </button>
+                  <button
+                    onClick={() => setSourceMode("builtin")}
+                    className={`py-2 px-1 text-xs sm:text-sm font-medium rounded-lg transition-all leading-tight ${
+                      sourceMode === "builtin"
                         ? "bg-background shadow-sm text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    Upload PPTX
+                    Design in App
                   </button>
                 </div>
 
@@ -331,7 +357,44 @@ export default function NewTemplate() {
                   </button>
                 </div>
 
-                {sourceMode === "new" ? (
+                {sourceMode === "builtin" ? (
+                  <div className="space-y-4">
+                    <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/15 text-primary p-2 rounded-xl shrink-0">
+                          <PenTool className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold mb-1">Design certificates inside Cephloe</p>
+                          <p className="text-sm text-muted-foreground">
+                            A full canvas editor with text, images, shapes, alignment guides,
+                            layers and undo/redo. Templates render to PDF entirely in your browser —
+                            no Google Slides required.
+                          </p>
+                        </div>
+                      </div>
+                      <ul className="text-sm space-y-1 text-muted-foreground pl-1">
+                        <li>• Drag, resize, rotate any element</li>
+                        <li>• Bundled fonts: Inter, Roboto, Lora, Playfair, Montserrat, Dancing Script</li>
+                        <li>• Insert <code className="bg-secondary px-1 rounded">{"<<placeholders>>"}</code>, QR codes, logos</li>
+                        <li>• Saved templates appear in the batch wizard</li>
+                      </ul>
+                    </div>
+                    <Button
+                      onClick={() => setLocation("/templates/builtin/new")}
+                      className="w-full h-11"
+                    >
+                      <PenTool className="w-4 h-4 mr-2" /> Open Builtin Editor
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setLocation("/templates")}
+                      className="w-full h-11"
+                    >
+                      View My Builtin Templates
+                    </Button>
+                  </div>
+                ) : sourceMode === "new" ? (
                   <div className="space-y-2">
                     <Label htmlFor="template-name">Template name</Label>
                     <Input
@@ -405,44 +468,27 @@ export default function NewTemplate() {
                 ) : (
                   <div className="space-y-4">
                     <Label>Select an existing Google Slide</Label>
-                    {templatesLoading ? (
-                      <div className="flex items-center gap-3 text-muted-foreground p-8"><Loader2 className="animate-spin" /> Loading presentations...</div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto p-1 pr-2">
-                        {templatesRes?.templates.length === 0 ? (
-                          <div className="col-span-full py-8 text-center text-muted-foreground bg-secondary/30 rounded-xl border border-dashed">
-                            No Google Slides found in your account.
-                          </div>
-                        ) : (
-                          templatesRes?.templates.map((tpl) => (
-                            <div
-                              key={tpl.id}
-                              onClick={() => {
-                                setSelectedTemplateId(tpl.id);
-                              }}
-                              className={`group p-3 rounded-xl border-2 cursor-pointer transition-all hover-elevate flex flex-col gap-3 ${
-                                selectedTemplateId === tpl.id
-                                  ? "border-primary bg-primary/5 ring-4 ring-primary/10"
-                                  : "border-border/50 bg-card hover:border-primary/30"
-                              }`}
-                            >
-                              {tpl.thumbnailUrl ? (
-                                <img
-                                  src={`${tpl.thumbnailUrl}${authToken ? `?token=${authToken}` : ""}`}
-                                  alt={tpl.name}
-                                  className="w-full aspect-[4/3] object-cover rounded-lg border border-border/50"
-                                />
-                              ) : (
-                                <div className="w-full aspect-[4/3] bg-secondary rounded-lg flex items-center justify-center">
-                                  <Presentation className="w-8 h-8 text-muted-foreground/50" />
-                                </div>
-                              )}
-                              <div className="font-semibold text-xs line-clamp-2 px-1">
-                                {tpl.name}
-                              </div>
-                            </div>
-                          ))
-                        )}
+                    <Button
+                      variant="outline"
+                      className="h-11 px-6 gap-2"
+                      disabled={templatePickerLoading}
+                      onClick={async () => {
+                        setTemplatePickerLoading(true);
+                        try {
+                          const picked = await openPicker("presentation");
+                          if (picked) { setSelectedTemplateId(picked.id); setSelectedTemplateName(picked.name); }
+                        } finally {
+                          setTemplatePickerLoading(false);
+                        }
+                      }}
+                    >
+                      {templatePickerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Presentation className="w-4 h-4" />}
+                      {selectedTemplateId ? "Change Presentation" : "Pick from Google Drive"}
+                    </Button>
+                    {selectedTemplateId && (
+                      <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5">
+                        <Presentation className="w-5 h-5 text-primary shrink-0" />
+                        <span className="text-sm font-medium truncate">{selectedTemplateName || selectedTemplateId}</span>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
@@ -451,7 +497,7 @@ export default function NewTemplate() {
                   </div>
                 )}
 
-                {sourceMode === "upload" ? (
+                {sourceMode === "builtin" ? null : sourceMode === "upload" ? (
                   <Button
                     onClick={handleUploadPptx}
                     disabled={uploadingPptx || !pptxFile || !templateName.trim()}
@@ -484,7 +530,7 @@ export default function NewTemplate() {
 
             {/* Step 1 – Edit in Slides */}
             {step === 1 && createdTemplate && (
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-8 space-y-5 sm:space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 p-3 rounded-2xl">
                     <Tag className="w-6 h-6" />
@@ -537,7 +583,7 @@ export default function NewTemplate() {
 
             {/* Step 2 – Review placeholders */}
             {step === 2 && (
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-8 space-y-5 sm:space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="bg-green-100 dark:bg-green-900/30 text-green-600 p-3 rounded-2xl">
                     <FileSpreadsheet className="w-6 h-6" />
@@ -607,7 +653,7 @@ export default function NewTemplate() {
 
             {/* Step 3 – QR Code */}
             {step === 3 && (
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-8 space-y-5 sm:space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 p-3 rounded-2xl">
                     <QrCode className="w-6 h-6" />
@@ -662,7 +708,7 @@ export default function NewTemplate() {
 
             {/* Step 4 – Done */}
             {step === 4 && createdTemplate && createdSheet && (
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-8 space-y-5 sm:space-y-6">
                 <div className="text-center space-y-3 py-2">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mx-auto">
                     <CheckCircle2 className="w-8 h-8" />
@@ -749,6 +795,7 @@ export default function NewTemplate() {
           </motion.div>
         </AnimatePresence>
       </Card>
+      {slidesGuard.modal}
     </div>
   );
 }

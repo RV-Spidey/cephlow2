@@ -1,5 +1,5 @@
 const WA_API_VERSION = "v18.0";
-const TEMPLATE_NAME = "document_senderv2";
+const TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || "document_senderv2";
 
 export function isWhatsAppConfigured(): boolean {
   return !!(process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN);
@@ -12,6 +12,7 @@ export async function sendWhatsAppDocument(
   var1: string, // {{1}} = participant name
   var2: string, // {{2}} = event name
   var3: string, // {{3}} = email prefix (profile URL slug)
+  certKey?: string, // R2 object key embedded in quick-reply payload so worker knows which cert
 ): Promise<string> { // returns wamid
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -22,6 +23,49 @@ export async function sendWhatsAppDocument(
   const separator = documentUrl.includes("?") ? "&" : "?";
   const freshUrl = `${documentUrl}${separator}_cb=${Date.now()}`;
 
+  const components: object[] = [
+    {
+      type: "header",
+      parameters: [
+        {
+          type: "document",
+          document: {
+            link: freshUrl,
+            filename,
+          },
+        },
+      ],
+    },
+    {
+      type: "body",
+      parameters: [
+        { type: "text", text: var1 },
+        { type: "text", text: var2 },
+        { type: "text", text: var3 },
+      ],
+    },
+    {
+      type: "button",
+      sub_type: "url",
+      index: 0,
+      parameters: [
+        { type: "text", text: var3 },
+      ],
+    },
+  ];
+
+  // Embed cert key in the quick-reply button payload (max 128 chars).
+  // The worker reads this back to skip the cert-selection list.
+  if (certKey) {
+    const payload = `report:${certKey}`.slice(0, 128);
+    components.push({
+      type: "button",
+      sub_type: "quick_reply",
+      index: 1,
+      parameters: [{ type: "payload", payload }],
+    });
+  }
+
   const body = {
     messaging_product: "whatsapp",
     to,
@@ -29,36 +73,7 @@ export async function sendWhatsAppDocument(
     template: {
       name: TEMPLATE_NAME,
       language: { code: templateLanguage },
-      components: [
-        {
-          type: "header",
-          parameters: [
-            {
-              type: "document",
-              document: {
-                link: freshUrl,
-                filename,
-              },
-            },
-          ],
-        },
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: var1 },
-            { type: "text", text: var2 },
-            { type: "text", text: var3 },
-          ],
-        },
-        {
-          type: "button",
-          sub_type: "url",
-          index: 0,
-          parameters: [
-            { type: "text", text: var3 },
-          ],
-        },
-      ],
+      components,
     },
   };
 

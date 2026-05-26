@@ -28,4 +28,5 @@ export interface Batch {
   generatedCount: number;
   sentCount: number;
   createdAt: string;
+  frameTier?: string;
 }

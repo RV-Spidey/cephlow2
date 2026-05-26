@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { getAuthClientForUser } from "./googleAuth.js";
 
 export async function getSheetsClient(uid: string) {
-  const auth = await getAuthClientForUser(uid);
+  const auth = await getAuthClientForUser(uid, "sheets");
   return google.sheets({ version: "v4", auth });
 }
 

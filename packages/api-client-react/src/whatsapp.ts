@@ -37,9 +37,40 @@ export const useSendCertEmail = (options?: {
   });
 };
 
+// ─── Lazy open-in-slides ─────────────────────────────────────────────────────
+
+export interface OpenCertSlideResponse {
+  slideFileId: string;
+  slideUrl: string;
+}
+
+export const openCertSlide = async (
+  batchId: string,
+  certId: string,
+): Promise<OpenCertSlideResponse> => {
+  return customFetch<OpenCertSlideResponse>(
+    `/api/batches/${batchId}/certificates/${certId}/open-slide`,
+    { method: "POST" },
+  );
+};
+
+export const useOpenCertSlide = (options?: {
+  mutation?: Parameters<typeof useMutation>[0];
+}) => {
+  return useMutation<
+    OpenCertSlideResponse,
+    Error,
+    { batchId: string; certId: string }
+  >({
+    ...(options?.mutation as any),
+    mutationFn: ({ batchId, certId }) => openCertSlide(batchId, certId),
+  });
+};
+
 export interface SendCertWhatsappRequest {
   var1Template: string;
   var2Template: string;
+  var3Template?: string;
 }
 
 export interface SendCertWhatsappResponse {
@@ -74,6 +105,7 @@ export const useSendCertWhatsapp = (options?: {
 export interface SendBatchWhatsappRequest {
   var1Template: string;
   var2Template: string;
+  var3Template?: string;
 }
 
 export interface SendBatchWhatsappResponse {

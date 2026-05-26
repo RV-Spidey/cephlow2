@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, MessageSquareWarning } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { useWorkspace } from "@/hooks/use-workspace";
 
 interface Report {
   id: number;
@@ -15,26 +18,97 @@ function maskPhone(phone: string) {
   return `****${phone.slice(-4)}`;
 }
 
+async function fetchReports(workspaceId: string): Promise<Report[]> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const base = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+  const res = await fetch(`${base}/api/reports`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "x-workspace-id": workspaceId,
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `${res.status}`);
+  }
+  return res.json();
+}
+
 export default function Reports() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const workerUrl = import.meta.env.VITE_WA_WORKER_URL;
-  const token = import.meta.env.VITE_WA_ANALYTICS_TOKEN;
+  const { toast } = useToast();
+  const { activeWorkspace } = useWorkspace();
+  const seenReportIdsRef = useRef<Set<number>>(new Set());
+  const initialLoadedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    if (!workerUrl || !token) {
-      setError("VITE_WA_WORKER_URL or VITE_WA_ANALYTICS_TOKEN not set.");
-      setLoading(false);
-      return;
-    }
-    fetch(`${workerUrl.replace(/\/$/, '')}/reports?token=${token}`)
-      .then(r => r.json())
-      .then((data: Report[]) => setReports(data))
-      .catch(() => setError("Failed to load reports."))
-      .finally(() => setLoading(false));
-  }, [workerUrl, token]);
+    if (!activeWorkspace) return;
+
+    let cancelled = false;
+
+    const loadReports = (isInitial = false) => {
+      fetchReports(activeWorkspace.id)
+        .then((data) => {
+          if (cancelled) return;
+          setReports(data);
+          setError(null);
+
+          const seen = seenReportIdsRef.current;
+          const newOnes: Report[] = [];
+          for (const r of data) {
+            if (!seen.has(r.id)) {
+              seen.add(r.id);
+              if (initialLoadedRef.current) newOnes.push(r);
+            }
+          }
+
+          if (!initialLoadedRef.current) {
+            initialLoadedRef.current = true;
+          } else if (newOnes.length > 0) {
+            if (newOnes.length === 1) {
+              const r = newOnes[0];
+              const certName = r.cert_key ? (r.cert_key.split("/").pop() || r.cert_key) : undefined;
+              toast({
+                title: "New issue reported",
+                description: certName ? `${certName}: "${r.message}"` : r.message,
+              });
+            } else {
+              toast({
+                title: `${newOnes.length} new issue reports`,
+                description: "Recipients reported issues via WhatsApp.",
+              });
+            }
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (isInitial) setError("Failed to load reports.");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          if (isInitial) setLoading(false);
+        });
+    };
+
+    loadReports(true);
+    const intervalId = window.setInterval(() => loadReports(false), 15000);
+    const onFocus = () => loadReports(false);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadReports(false);
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeWorkspace, toast]);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -69,7 +143,7 @@ export default function Reports() {
 
       {!loading && !error && reports.length > 0 && (
         <div className="border-2 border-foreground divide-y-2 divide-foreground">
-          {reports.map(r => (
+          {reports.map((r) => (
             <div key={r.id} className="p-4 space-y-1">
               <div className="flex items-center justify-between gap-4">
                 <span className="font-mono text-xs font-bold">{maskPhone(r.phone)}</span>
@@ -79,7 +153,7 @@ export default function Reports() {
               </div>
               {r.cert_key && (
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  {r.cert_key.split('/').pop()}
+                  {r.cert_key.split("/").pop()}
                 </p>
               )}
               <p className="text-sm">{r.message}</p>

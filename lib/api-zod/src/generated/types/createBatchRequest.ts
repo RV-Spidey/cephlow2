@@ -22,4 +22,5 @@ export interface CreateBatchRequest {
   emailBody?: string;
   categoryColumn?: string;
   categoryTemplateMap?: CreateBatchRequestCategoryTemplateMap;
+  frameTier?: string;
 }

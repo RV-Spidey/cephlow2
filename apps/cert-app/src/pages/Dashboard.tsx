@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { useListBatches, useListCertificates } from "@workspace/api-client-react";
+import { useListBatches } from "@workspace/api-client-react";
+import { PendingInviteBanner } from "@/components/PendingInviteBanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,14 +9,14 @@ import { format } from "date-fns";
 
 export default function Dashboard() {
   const { data: batchesRes, isLoading: batchesLoading } = useListBatches();
-  const { data: certsRes, isLoading: certsLoading } = useListCertificates();
 
   const batches = batchesRes?.batches || [];
-  const totalCerts = certsRes?.total || 0;
-  const sentCerts = certsRes?.certificates?.filter(c => c.status === "sent").length || 0;
+  const totalCerts = batches.reduce((sum, b) => sum + (b.generatedCount || 0), 0);
+  const sentCerts = batches.reduce((sum, b) => sum + (b.sentCount || 0), 0);
 
   return (
     <div className="space-y-8">
+      <PendingInviteBanner />
 
       {/* Hero */}
       <div className="bg-foreground text-background p-8 md:p-12 border-2 border-foreground">
@@ -29,7 +30,7 @@ export default function Dashboard() {
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg" variant="outline" className="border-2 border-background/40 text-background bg-transparent hover:bg-background/10 font-bold uppercase tracking-widest text-xs px-6 h-11">
-              <Link href="/templates/new">
+              <Link href="/templates">
                 <Sparkles className="mr-2 w-4 h-4" />
                 New Template
               </Link>
@@ -48,8 +49,8 @@ export default function Dashboard() {
       <div className="grid gap-0 grid-cols-1 md:grid-cols-3 border-2 border-foreground">
         {[
           { label: "Total Batches", value: batchesLoading ? "—" : batches.length, icon: Presentation },
-          { label: "Certs Generated", value: certsLoading ? "—" : totalCerts, icon: Award },
-          { label: "Successfully Sent", value: certsLoading ? "—" : sentCerts, icon: Send },
+          { label: "Certs Generated", value: batchesLoading ? "—" : totalCerts, icon: Award },
+          { label: "Successfully Sent", value: batchesLoading ? "—" : sentCerts, icon: Send },
         ].map((stat, i) => (
           <div key={stat.label} className={`p-6 ${i < 2 ? "md:border-r-2 border-foreground" : ""} border-b-2 md:border-b-0 border-foreground last:border-b-0`}>
             <div className="flex items-center justify-between mb-3">

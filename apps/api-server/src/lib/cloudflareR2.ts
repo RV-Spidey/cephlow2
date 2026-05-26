@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
-
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 function getConfig() {
   return {
     accountId: process.env.R2_ACCOUNT_ID,
@@ -9,15 +9,22 @@ function getConfig() {
   };
 }
 
+// Singleton S3Client — reused across all uploads to avoid opening
+// a new connection pool on every call.
+let _r2Client: S3Client | null = null;
 function getR2Client(config: ReturnType<typeof getConfig>): S3Client {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: config.accessKeyId!,
-      secretAccessKey: config.secretAccessKey!,
-    },
-  });
+  if (!_r2Client) {
+    _r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: config.accessKeyId!,
+        secretAccessKey: config.secretAccessKey!,
+      },
+      maxAttempts: 3,
+    });
+  }
+  return _r2Client;
 }
 
 export function isR2Configured(): boolean {
@@ -80,6 +87,32 @@ export async function uploadPdfToR2(
 }
 
 /**
+ * Upload an arbitrary buffer (image, etc.) to R2 with a custom content type.
+ * Returns the R2 object key.
+ */
+export async function uploadBufferToR2(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<string> {
+  const config = getConfig();
+  if (!config.accountId || !config.accessKeyId || !config.secretAccessKey || !config.bucketName) {
+    throw new Error("Cloudflare R2 credentials are not fully configured");
+  }
+  const client = getR2Client(config);
+  const safeKey = key.replace(/[^a-zA-Z0-9+\-_./]/g, "_");
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucketName,
+      Key: safeKey,
+      Body: buffer,
+      ContentType: contentType,
+    })
+  );
+  return safeKey;
+}
+
+/**
  * Copy an existing R2 object to a new key.
  */
 export async function copyR2Object(sourceKey: string, destKey: string): Promise<void> {
@@ -138,3 +171,60 @@ export async function deleteR2Objects(keys: string[]): Promise<void> {
   }
 }
 
+/**
+ * Generate a presigned URL for direct uploads from the browser to Cloudflare R2.
+ * @param folderName The target folder
+ * @param fileName The target filename
+ * @param contentType Defaults to application/pdf
+ * @param expiresIn Seconds until the URL expires (default 15 minutes)
+ * @returns { url: string, key: string }
+ */
+export async function generatePresignedPutUrl(
+  folderName: string,
+  fileName: string,
+  contentType: string = "application/pdf",
+  expiresIn: number = 900
+): Promise<{ url: string; key: string }> {
+  const config = getConfig();
+  if (!config.accountId || !config.accessKeyId || !config.secretAccessKey || !config.bucketName) {
+    throw new Error("Cloudflare R2 credentials are not fully configured");
+  }
+
+  const client = getR2Client(config);
+  const safeFolderName = folderName.replace(/[^a-zA-Z0-9+\-_.]/g, "_");
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9+\-_.]/g, "_");
+  const key = `${safeFolderName}/${safeFileName.endsWith(".pdf") ? safeFileName : `${safeFileName}.pdf`}`;
+
+  const command = new PutObjectCommand({
+    Bucket: config.bucketName,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const url = await getSignedUrl(client, command, { expiresIn });
+  return { url, key };
+}
+
+/**
+ * Generic presigned PUT URL for arbitrary assets (no implicit .pdf extension).
+ * Caller supplies the full object key — caller is responsible for any sanitisation.
+ */
+export async function generatePresignedAssetPutUrl(
+  key: string,
+  contentType: string,
+  expiresIn: number = 600
+): Promise<{ url: string; key: string }> {
+  const config = getConfig();
+  if (!config.accountId || !config.accessKeyId || !config.secretAccessKey || !config.bucketName) {
+    throw new Error("Cloudflare R2 credentials are not fully configured");
+  }
+  const client = getR2Client(config);
+  const safeKey = key.replace(/[^a-zA-Z0-9+\-_./]/g, "_");
+  const command = new PutObjectCommand({
+    Bucket: config.bucketName,
+    Key: safeKey,
+    ContentType: contentType,
+  });
+  const url = await getSignedUrl(client, command, { expiresIn });
+  return { url, key: safeKey };
+}

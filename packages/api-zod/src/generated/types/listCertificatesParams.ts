@@ -7,6 +7,6 @@
  */
 
 export type ListCertificatesParams = {
-  batchId?: number;
+  batchId?: string;
   status?: string;
 };
